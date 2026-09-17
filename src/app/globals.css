@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 33% 99%;
+    --foreground: 240 10% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 12%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 30% 96%;
+    --secondary-foreground: 262 40% 25%;
+    --muted: 240 20% 96%;
+    --muted-foreground: 240 5% 45%;
+    --accent: 262 60% 95%;
+    --accent-foreground: 262 45% 28%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 15% 90%;
+    --input: 240 15% 90%;
+    --ring: 262 83% 58%;
+    --radius: 1rem;
+    --positive: 152 60% 34%;
+    --positive-foreground: 0 0% 100%;
+    --negative: 8 70% 47%;
+    --negative-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 250 20% 8%;
+    --foreground: 240 10% 96%;
+    --card: 250 18% 12%;
+    --card-foreground: 240 10% 96%;
+    --popover: 250 18% 12%;
+    --popover-foreground: 240 10% 96%;
+    --primary: 262 83% 68%;
+    --primary-foreground: 250 40% 10%;
+    --secondary: 250 16% 20%;
+    --secondary-foreground: 240 10% 96%;
+    --muted: 250 16% 18%;
+    --muted-foreground: 240 8% 65%;
+    --accent: 250 20% 24%;
+    --accent-foreground: 240 10% 96%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 250 14% 22%;
+    --input: 250 14% 22%;
+    --ring: 262 83% 68%;
+    --positive: 152 45% 55%;
+    --positive-foreground: 250 40% 10%;
+    --negative: 8 65% 62%;
+    --negative-foreground: 250 40% 10%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Respect users who asked for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

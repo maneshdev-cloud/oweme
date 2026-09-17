@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>You’re offline · OweMe</title>
+    <meta name="theme-color" content="#7c3aed" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0; min-height: 100svh; display: grid; place-items: center; padding: 24px;
+        font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #faf9f7; color: #14121c; text-align: center;
+      }
+      .card { max-width: 34ch; }
+      .dot { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 18px;
+             background: linear-gradient(#7c3aed, #4c1d95); display: grid; place-items: center;
+             color: #fff; font-size: 26px; font-weight: 700; }
+      h1 { font-size: 1.35rem; margin: 0 0 8px; }
+      p { margin: 0 0 18px; color: #5b5768; }
+      a { display: inline-block; padding: 10px 16px; border-radius: 999px; background: #7c3aed;
+          color: #fff; text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+      small { display: block; margin-top: 18px; color: #77727f; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #14121c; color: #f6f5f9; }
+        p, small { color: #a7a3b3; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="dot" aria-hidden="true">₹</div>
+      <h1>You’re offline</h1>
+      <p>
+        Everything you saved is safe on the server — you just can’t read or change it without a connection. OweMe
+        deliberately refuses to write expenses offline: a “saved” that never arrived would be worse than a wait.
+      </p>
+      <a href="/home">Try again</a>
+      <small>Settling up in cash on a train? Note the amount down, and add it when you’re back.</small>
+    </div>
+  </body>
+</html>

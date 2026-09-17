@@ -1,0 +1,193 @@
+'use client';
+
+import { cloneElement, isValidElement, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { Handshake, Wallet } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { PersonAvatar } from '@/components/person-avatar';
+import { createSettlement } from '@/lib/actions/expenses';
+import { formatINR, parseAmountInput, toAmountString } from '@/lib/money';
+import { cn } from '@/lib/utils';
+import type { Person } from '@/lib/types';
+
+/**
+ * "We settled this in cash/UPI — write it down."
+ * The other person confirms it, which is what actually moves the numbers.
+ */
+export function SettleUpDialog({
+  open,
+  onOpenChange,
+  person,
+  balanceMinor,
+  groupId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  person: Person;
+  balanceMinor: number;
+  groupId?: string;
+  trigger?: React.ReactNode;
+}) {
+  const router = useRouter();
+  const suggested = Math.abs(balanceMinor);
+  const [amount, setAmount] = useState(suggested > 0 ? (suggested / 100).toFixed(2).replace(/\.00$/, '') : '');
+  const [direction, setDirection] = useState<'i_paid' | 'they_paid'>(balanceMinor < 0 ? 'i_paid' : 'they_paid');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const requestId = useRef(crypto.randomUUID());
+
+  const minor = parseAmountInput(amount);
+  const firstName = person.full_name.split(' ')[0];
+
+  function submit() {
+    if (minor === null || minor <= 0) {
+      setError('Enter an amount greater than zero.');
+      return;
+    }
+    setError(null);
+
+    startTransition(async () => {
+      const result = await createSettlement({
+        counterpartyId: person.id,
+        groupId: groupId ?? null,
+        amount: toAmountString(minor),
+        direction,
+        clientRequestId: requestId.current,
+      });
+
+      if (!result.ok) {
+        setError(result.error);
+        toast.error(result.error);
+        return;
+      }
+
+      requestId.current = crypto.randomUUID();
+      toast.success('Recorded — they’ll be asked to confirm it landed.');
+      onOpenChange(false);
+      router.push(`/settlements/${result.data.id}`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Settle up with {firstName}</DialogTitle>
+          <DialogDescription>
+            This records money that already changed hands. They’ll get a prompt to confirm it arrived.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-3 rounded-xl bg-secondary p-3">
+          <PersonAvatar person={person} className="h-9 w-9" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">{person.full_name}</p>
+            <p className="text-xs text-secondary-foreground">
+              {balanceMinor === 0
+                ? 'No open balance — you can still record a payment.'
+                : balanceMinor > 0
+                  ? `To receive from ${firstName}: ${formatINR(Math.abs(balanceMinor))}`
+                  : `To give to ${firstName}: ${formatINR(Math.abs(balanceMinor))}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="settle-amount">How much?</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">₹</span>
+            <Input
+              id="settle-amount"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
+              placeholder="0.00"
+              className="tabular"
+            />
+          </div>
+          {suggested > 0 && (
+            <button
+              type="button"
+              className="text-xs text-primary underline-offset-4 hover:underline"
+              onClick={() => setAmount((suggested / 100).toFixed(2).replace(/\.00$/, ''))}
+            >
+              Use the full balance · {formatINR(suggested)}
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Who paid?</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              aria-pressed={direction === 'i_paid'}
+              onClick={() => setDirection('i_paid')}
+              className={cn(
+                'rounded-xl border px-3 py-2.5 text-sm font-medium',
+                direction === 'i_paid' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent',
+              )}
+            >
+              I paid {firstName}
+            </button>
+            <button
+              type="button"
+              aria-pressed={direction === 'they_paid'}
+              onClick={() => setDirection('they_paid')}
+              className={cn(
+                'rounded-xl border px-3 py-2.5 text-sm font-medium',
+                direction === 'they_paid' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent',
+              )}
+            >
+              {firstName} paid me
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p role="alert" className="rounded-xl bg-negative/10 px-3 py-2 text-sm text-negative">
+            {error}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            <Wallet className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+            Cash, UPI, whatever you used.
+          </p>
+          <Button onClick={submit} loading={pending} disabled={pending}>
+            <Handshake className="h-4 w-4" /> Record payment
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function SettleUpButton(props: Omit<React.ComponentProps<typeof SettleUpDialog>, 'open' | 'onOpenChange'>) {
+  const [open, setOpen] = useState(false);
+  const trigger = isValidElement(props.trigger) ? (
+    cloneElement(props.trigger as React.ReactElement<{ onClick?: (event: React.MouseEvent) => void }>, {
+      onClick: (event: React.MouseEvent) => {
+        (props.trigger as React.ReactElement<{ onClick?: (event: React.MouseEvent) => void }>).props.onClick?.(event);
+        setOpen(true);
+      },
+    })
+  ) : (
+    <span role="button" tabIndex={0} onClick={() => setOpen(true)} className="inline-flex">
+      {props.trigger}
+    </span>
+  );
+
+  return (
+    <>
+      {trigger}
+      <SettleUpDialog {...props} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}

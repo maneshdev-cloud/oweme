@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OweMe">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#tile)"/>
+  <text x="256" y="300" text-anchor="middle" font-family="Inter, Segoe UI, DejaVu Sans, sans-serif"
+        font-size="266" font-weight="700" fill="#ffffff">₹</text>
+  <rect x="140" y="379" width="106" height="18" rx="9" fill="#ffffff"/>
+  <rect x="266" y="379" width="106" height="18" rx="9" fill="#ffffff" opacity="0.7"/>
+</svg>

@@ -1,0 +1,244 @@
+import Link from 'next/link';
+import { ArrowRight, BellRing, ExternalLink, HandshakeIcon, MailWarning, ReceiptText, ShieldCheck, UserPlus } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/empty-state';
+import { Amount } from '@/components/money';
+import { ExpenseCard } from '@/components/expense-card';
+import { PersonAvatar } from '@/components/person-avatar';
+import { StatusBadge } from '@/components/status-badge';
+import { formatINR, toMinor } from '@/lib/money';
+import { getDashboard, getMyProfile } from '@/lib/queries/core';
+import { sendFriendRequest } from '@/lib/actions/friends';
+
+export const metadata = { title: 'Home' };
+
+export default async function HomePage() {
+  const [dashboard, profile] = await Promise.all([getDashboard(), getMyProfile()]);
+  const firstName = profile?.full_name.split(' ')[0] ?? 'there';
+  const { totals } = dashboard;
+
+  return (
+    <div className="space-y-6">
+      <section aria-labelledby="summary-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="summary-heading" className="text-xl font-semibold tracking-tight">
+              Hey {firstName}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {totals.you_are_owed === 0 && totals.you_owe === 0
+                ? 'You’re all square with everyone.'
+                : 'Here’s where things stand right now.'}
+            </p>
+          </div>
+          <a
+            href="https://manesh.pages.dev/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
+          >
+            <span>Built by</span>
+            <ExternalLink className="h-3 w-3 opacity-60" aria-hidden />
+          </a>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Card className="bg-gradient-to-br from-primary/10 to-transparent">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">To receive</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold tabular text-positive">{formatINR(toMinor(totals.you_are_owed))}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                From {dashboard.balances.filter((row) => row.balance > 0).length} friend
+                {dashboard.balances.filter((row) => row.balance > 0).length === 1 ? '' : 's'}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">To give</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold tabular text-negative">{formatINR(toMinor(totals.you_owe))}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                To {dashboard.balances.filter((row) => row.balance < 0).length} friend
+                {dashboard.balances.filter((row) => row.balance < 0).length === 1 ? '' : 's'}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Open items</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold tabular">{dashboard.openExpenses.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {dashboard.waitingOnYou.length > 0
+                  ? `${dashboard.waitingOnYou.length} waiting on your confirmation`
+                  : 'Nothing needs your confirmation'}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {dashboard.waitingOnYou.length > 0 && (
+        <section aria-labelledby="waiting-heading" className="space-y-3">
+          <h2 id="waiting-heading" className="flex items-center gap-2 text-base font-semibold">
+            <BellRing className="h-4 w-4 text-primary" aria-hidden />
+            Did you receive these payments?
+          </h2>
+          <div className="space-y-2">
+            {dashboard.waitingOnYou.map((expense) => (
+              <Card key={expense.id} className="border-primary/40">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <PersonAvatar person={expense.counterparty} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {expense.counterparty.full_name.split(' ')[0]} says they paid you{' '}
+                      {formatINR(toMinor(expense.amount))}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {expense.description} · <StatusBadge status={expense.status} className="align-middle" />
+                    </p>
+                  </div>
+                  <Button asChild size="sm">
+                    <Link href={`/expenses/${expense.id}`}>
+                      Confirm <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="balances-heading" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 id="balances-heading" className="text-base font-semibold">
+            Balances
+          </h2>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/friends">
+              All friends <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+
+        {dashboard.balances.length === 0 ? (
+          <EmptyState
+            icon={HandshakeIcon}
+            title="No open balances"
+            description="Add an expense and OweMe keeps track of what to give and what to receive — you’ll never have to remember it yourself."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {dashboard.balances.map((row) => (
+              <li key={`${row.counterparty.id}-${row.currency}`}>
+                <Link
+                  href={`/friends?friend=${row.counterparty.id}`}
+                  className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 transition-colors hover:bg-accent/40"
+                >
+                  <PersonAvatar person={row.counterparty} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{row.counterparty.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.balance > 0 ? 'To receive' : 'To give'}
+                    </p>
+                  </div>
+                  <Amount minor={toMinor(row.balance)} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="activity-heading" className="space-y-3">
+        <h2 id="activity-heading" className="flex items-center gap-2 text-base font-semibold">
+          <ReceiptText className="h-4 w-4" aria-hidden />
+          Recent activity
+        </h2>
+
+        {dashboard.recentActivity.length === 0 ? (
+          <EmptyState
+            icon={ReceiptText}
+            title="Nothing here yet"
+            description="Your printouts, chai runs and ticket splits will show up here the moment you add one."
+          />
+        ) : (
+          <div className="space-y-2">
+            {dashboard.recentActivity.map((expense) => (
+              <ExpenseCard
+                key={expense.id}
+                expense={expense}
+                counterparty={expense.counterparty}
+                youArePayer={expense.youArePayer}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {dashboard.suggestions.length > 0 && (
+        <section aria-labelledby="people-heading" className="space-y-3">
+          <h2 id="people-heading" className="flex items-center gap-2 text-base font-semibold">
+            <UserPlus className="h-4 w-4" aria-hidden />
+            People on OweMe
+          </h2>
+          <ul className="space-y-2">
+            {dashboard.suggestions.map((person) => (
+              <li key={person.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3.5">
+                <PersonAvatar person={person} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{person.full_name}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
+                </div>
+                {person.friendship_status === 'accepted' ? (
+                  <span className="text-sm font-medium text-positive">Friends</span>
+                ) : person.request_direction === 'outgoing' ? (
+                  <span className="text-sm text-muted-foreground">Request sent</span>
+                ) : person.request_direction === 'incoming' ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/notifications">Accept request</Link>
+                  </Button>
+                ) : (
+                  <form
+                    action={async () => {
+                      'use server';
+                      await sendFriendRequest({ addresseeId: person.id });
+                    }}
+                  >
+                    <Button type="submit" size="sm" variant="outline">
+                      Add friend
+                    </Button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <p className="flex items-center gap-2 rounded-2xl bg-secondary p-3 text-xs text-secondary-foreground">
+        <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+        Every expense is stored with a full history, and only you and the other person can read it.
+        {totals.net !== 0 ? ` Your net position is ${formatINR(toMinor(totals.net))}.` : ''}
+      </p>
+
+      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <MailWarning className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span>Something wrong?</span>
+        <a
+          href="mailto:minisotechsolutions@gmail.com?subject=OweMe%20Issue%20Report&body=Hi%20OweMe%20team%2C%0A%0AI%20found%20an%20issue%3A%0A%0A"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Report an issue
+        </a>
+      </div>
+    </div>
+  );
+}
