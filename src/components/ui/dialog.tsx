@@ -4,6 +4,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useVisualViewport } from '@/hooks/use-visual-viewport';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -28,29 +29,48 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 /**
  * Mobile-first: a sheet that rises from the bottom on phones (thumb reachable)
  * and becomes a centred dialog on larger screens.
+ * Dynamically adjusts its bottom offset and max height when the mobile virtual
+ * keyboard / numpad opens so the sheet is never covered.
  */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid max-h-[92svh] w-full gap-4 overflow-y-auto rounded-t-3xl border bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-lg duration-200 data-[state=open]:animate-slide-up sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:p-6',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 opacity-70 transition-opacity hover:bg-accent hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+>(({ className, children, style, ...props }, ref) => {
+  const { keyboardInset, visibleHeight, isKeyboardOpen } = useVisualViewport();
+
+  const dynamicStyle = React.useMemo(() => {
+    if (keyboardInset > 0) {
+      return {
+        bottom: `${keyboardInset}px`,
+        maxHeight: `${Math.max(200, visibleHeight - 8)}px`,
+        ...style,
+      };
+    }
+    return style;
+  }, [keyboardInset, visibleHeight, style]);
+
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        style={dynamicStyle}
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-50 grid max-h-[92svh] w-full gap-4 overflow-y-auto rounded-t-3xl border bg-background p-4 shadow-lg duration-200 data-[state=open]:animate-slide-up sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:p-6',
+          isKeyboardOpen ? 'pb-3 transition-none' : 'pb-[calc(1rem+env(safe-area-inset-bottom))]',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 opacity-70 transition-opacity hover:bg-accent hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
