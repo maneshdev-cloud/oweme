@@ -8,7 +8,8 @@ import { SettlementActions } from '@/components/settlement-actions';
 import { requireUser } from '@/lib/supabase/server';
 import { getSettlementDetail } from '@/lib/queries/social';
 import { formatINR, toMinor } from '@/lib/money';
-import { cn, timeAgo } from '@/lib/utils';
+import { BalanceDirectionBadge } from '@/components/money';
+import { timeAgo } from '@/lib/utils';
 
 export default async function SettlementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,14 +40,7 @@ export default async function SettlementPage({ params }: { params: Promise<{ id:
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-3xl font-semibold tabular">{formatINR(amount)}</p>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
-                youAreReceiver ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative',
-              )}
-            >
-              {youAreReceiver ? '↙ To receive' : '↗ To give'}
-            </span>
+            <BalanceDirectionBadge minor={youAreReceiver ? amount : -amount} className="px-2.5 py-1 text-xs" />
           </div>
 
           <div className="flex items-center gap-3 rounded-2xl border p-3">
@@ -86,7 +80,7 @@ export default async function SettlementPage({ params }: { params: Promise<{ id:
           {settlement.status === 'DISPUTED' && (
             <p className="flex items-center gap-2 rounded-xl bg-negative/10 px-3 py-2 text-sm text-negative">
               <ShieldQuestion className="h-4 w-4" aria-hidden />
-              The receiver says this payment hasn’t arrived. Sort it out between you, then re-record it if needed.
+              The receiver says this payment was not received. The amount remains outstanding.
             </p>
           )}
 

@@ -114,9 +114,19 @@ export async function transitionExpense(input: unknown): Promise<ActionResult> {
     return fail(friendly(error));
   }
 
+  // Clean up any pending confirmation notifications from database immediately
+  if (nextStatus === 'CONFIRMED' || nextStatus === 'DISPUTED' || nextStatus === 'CANCELLED') {
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('related_expense_id', expenseId)
+      .eq('type', 'payment_marked');
+  }
+
   revalidatePath('/home');
-  revalidatePath(`/expenses/${expenseId}`);
   revalidatePath('/notifications');
+  revalidatePath('/friends');
+  revalidatePath(`/expenses/${expenseId}`);
   return okVoid();
 }
 
@@ -138,6 +148,10 @@ export async function createSettlement(
   const payerId = direction === 'i_paid' ? user.id : counterpartyId;
   const receiverId = direction === 'i_paid' ? counterpartyId : user.id;
 
+  // If receiver records "They paid me", it's confirmed immediately since they received the cash
+  const isPreConfirmed = direction === 'they_paid';
+  const initialStatus = isPreConfirmed ? 'CONFIRMED' : 'PENDING';
+
   const { data, error } = await supabase
     .from('settlements')
     .insert({
@@ -146,6 +160,8 @@ export async function createSettlement(
       receiver_id: receiverId,
       amount: toAmountString(toMinor(amount)),
       currency: 'INR',
+      status: initialStatus,
+      confirmed_at: isPreConfirmed ? new Date().toISOString() : null,
       created_by: user.id,
       client_request_id: clientRequestId,
     })
@@ -167,6 +183,8 @@ export async function createSettlement(
   }
 
   revalidatePath('/home');
+  revalidatePath('/notifications');
+  revalidatePath('/friends');
   if (groupId) revalidatePath(`/groups/${groupId}`);
   return ok({ id: data!.id, duplicate: false });
 }
@@ -180,9 +198,16 @@ export async function transitionSettlement(input: unknown): Promise<ActionResult
   const nextStatus = action === 'confirm' ? 'CONFIRMED' : action === 'dispute' ? 'DISPUTED' : 'CANCELLED';
 
   const supabase = await createClient();
+  const updatePayload: { status: string; confirmed_at?: string | null } = { status: nextStatus };
+  if (nextStatus === 'CONFIRMED') {
+    updatePayload.confirmed_at = new Date().toISOString();
+  } else {
+    updatePayload.confirmed_at = null;
+  }
+
   const { data, error } = await supabase
     .from('settlements')
-    .update({ status: nextStatus })
+    .update(updatePayload)
     .eq('id', settlementId)
     .select('group_id')
     .single();
@@ -192,7 +217,16 @@ export async function transitionSettlement(input: unknown): Promise<ActionResult
     return fail(friendly(error));
   }
 
+  // Delete pending confirmation notifications for this settlement so receiver is never asked again
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('related_settlement_id', settlementId)
+    .eq('type', 'settlement_created');
+
   revalidatePath('/home');
+  revalidatePath('/notifications');
+  revalidatePath('/friends');
   revalidatePath(`/settlements/${settlementId}`);
   if (data?.group_id) revalidatePath(`/groups/${data.group_id}`);
   return okVoid();

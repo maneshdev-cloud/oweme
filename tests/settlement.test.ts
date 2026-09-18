@@ -280,6 +280,25 @@ describe('per-user helpers', () => {
     expectAllSettled(balances, transfers);
     expect(transfers.every(t => Number.isInteger(t.amount))).toBe(true);
   });
+
+  it('reduces balance to exactly 0 when full outstanding amount is settled', () => {
+    // User A is owed 66000 paise (₹660), User B owes 66000 paise
+    // When a confirmed settlement of 66000 paise occurs, net balance becomes 0
+    const net = computeNetBalances([
+      { userId: B, amount: -66000 },
+      { userId: B, amount: 66000 }, // Confirmed settlement offset
+    ]);
+    expect(net).toEqual([{ userId: B, amount: 0 }]);
+  });
+
+  it('updates balance accurately on partial settlement', () => {
+    // User A is owed 66000 paise (₹660), User B pays 30000 paise (₹300)
+    const net = computeNetBalances([
+      { userId: B, amount: -66000 },
+      { userId: B, amount: 30000 },
+    ]);
+    expect(net).toEqual([{ userId: B, amount: -36000 }]);
+  });
 });
 
 function sum(values: number[]): number {

@@ -36,8 +36,8 @@ export const EXPENSE_STATUS_META = {
     tone: 'positive' as const,
   },
   DISPUTED: {
-    label: 'Disputed',
-    hint: 'The payment was not received — needs a chat',
+    label: 'Not confirmed / Not received',
+    hint: 'The payment was not received — the amount remains outstanding',
     tone: 'negative' as const,
   },
   CANCELLED: {

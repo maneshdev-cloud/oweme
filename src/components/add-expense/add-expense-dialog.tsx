@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Check, CloudOff, Search, Users } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Check, CloudOff, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -380,7 +380,7 @@ export function AddExpenseDialog({
                 >
                   <span className="font-semibold">I paid {minor ? formatINR(minor) : ''}</span>
                   <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-positive">
-                    ↙ To receive
+                    <ArrowDownLeft className="h-3 w-3" /> To receive
                   </span>
                 </button>
                 <button
@@ -396,7 +396,7 @@ export function AddExpenseDialog({
                 >
                   <span className="font-semibold">{selected ? selected.full_name.split(' ')[0] : 'They'} paid {minor ? formatINR(minor) : ''}</span>
                   <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-negative">
-                    ↗ To give
+                    <ArrowUpRight className="h-3 w-3" /> To give
                   </span>
                 </button>
               </div>
