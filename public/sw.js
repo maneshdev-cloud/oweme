@@ -181,3 +181,16 @@ self.addEventListener('notificationclick', (event) => {
     })(),
   );
 });
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = event.data;
+    event.waitUntil(
+      self.registration.showNotification(title || 'OweMe', {
+        icon: '/icons/icon-192.png',
+        badge: '/icons/favicon-32.png',
+        ...options,
+      }),
+    );
+  }
+});

@@ -25,12 +25,12 @@ const inter = localFont({
 });
 
 export const metadata: Metadata = {
-  title: { default: `${APP_NAME} — ${APP_TAGLINE}`, template: `%s · ${APP_NAME}` },
+  title: { default: `${APP_NAME} [BETA] — ${APP_TAGLINE}`, template: `%s · ${APP_NAME} [BETA]` },
   description:
     'Track small money between friends — printouts, chai, tickets, trips — and settle up without the awkwardness.',
-  applicationName: APP_NAME,
+  applicationName: `${APP_NAME} [BETA]`,
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: APP_NAME },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: `${APP_NAME} [BETA]` },
   icons: {
     icon: [
       { url: '/icons/icon.svg', type: 'image/svg+xml' },

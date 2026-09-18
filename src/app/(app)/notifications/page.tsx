@@ -1,5 +1,6 @@
 import { filterResolvableNotifications, getNotifications } from '@/lib/queries/social';
 import { NotificationList } from '@/components/notifications/notification-list';
+import { NotificationPromptBanner } from '@/components/notifications/notification-prompt-banner';
 
 export const metadata = { title: 'Alerts' };
 
@@ -17,6 +18,7 @@ export default async function NotificationsPage() {
           Nothing is lost if your phone was off — every one of these is stored first, then shown.
         </p>
       </div>
+      <NotificationPromptBanner />
       <NotificationList
         notifications={withResolvable.map((notification) => ({
           id: notification.id,

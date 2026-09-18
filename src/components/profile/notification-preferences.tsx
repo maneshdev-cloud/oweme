@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { updateNotificationPreferences } from '@/lib/actions/notifications';
+import { testDeviceNotification } from '@/lib/notifications';
 
 /**
  * The app works completely without browser push — notifications are rows in the
@@ -133,11 +134,7 @@ export function NotificationPreferences({
           size="sm"
           loading={pending}
           onClick={async () => {
-            const registration = await navigator.serviceWorker?.getRegistration();
-            registration?.showNotification('OweMe is set up', {
-              body: 'This is how a payment reminder will look.',
-              icon: '/icons/icon-192.png',
-            });
+            await testDeviceNotification();
           }}
         >
           Send a test notification

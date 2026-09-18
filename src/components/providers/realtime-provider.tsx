@@ -2,7 +2,13 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { getClient } from '@/lib/supabase/client';
+import {
+  playNotificationSound,
+  showNativeNotification,
+  vibrateDevice,
+} from '@/lib/notifications';
 
 /**
  * One realtime channel per signed-in session.
@@ -70,6 +76,43 @@ export function RealtimeProvider({ userId, children }: { userId: string; childre
     };
 
     const channel = supabase.channel(`oweme:${userId}`);
+
+    channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notifications' },
+      (payload) => {
+        const notif = payload.new as {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          body?: string;
+          deep_link?: string;
+        };
+
+        if (notif && notif.user_id === userId) {
+          playNotificationSound();
+          vibrateDevice();
+
+          toast(notif.title || 'New notification', {
+            description: notif.body || undefined,
+            action: notif.deep_link
+              ? {
+                  label: 'View',
+                  onClick: () => router.push(notif.deep_link!),
+                }
+              : undefined,
+            duration: 7000,
+          });
+
+          void showNativeNotification({
+            title: notif.title || 'OweMe [BETA]',
+            body: notif.body || 'You have a new alert',
+            url: notif.deep_link || '/notifications',
+            tag: notif.id ? `oweme-${notif.id}` : undefined,
+          });
+        }
+      },
+    );
 
     for (const table of REALTIME_TABLES) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
