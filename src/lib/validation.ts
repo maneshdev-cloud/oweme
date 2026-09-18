@@ -6,8 +6,11 @@ export const uuid = z.string().uuid();
 
 export const amountString = z
   .string()
-  .regex(/^\d{1,12}(\.\d{1,2})?$/, 'Enter an amount like 28 or 1250.50')
-  .refine((value) => Number(value) > 0, 'Amount must be more than zero');
+  .regex(/^\d{1,4}(\.\d{1,2})?$/, 'Enter an amount between ₹0.10 and ₹5,000')
+  .refine((value) => {
+    const num = Number(value);
+    return !Number.isNaN(num) && num >= 0.1 && num <= 5000;
+  }, 'Amount must be between ₹0.10 and ₹5,000');
 
 export const categoryField = z.string().trim().min(1).max(48);
 

@@ -50,7 +50,8 @@ export function AddExpenseButton({
         disabled={disabled}
         aria-label="Add expense"
         className={cn(
-          'fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-95 disabled:opacity-50 lg:hidden',
+          'fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-14 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-95 disabled:opacity-50 lg:hidden',
+          open && 'hidden pointer-events-none',
           className,
         )}
       >

@@ -74,10 +74,24 @@ export function minimizeTransfers(balances: Balance[], epsilon = 0): Transfer[] 
   const transfers: Transfer[] = [];
   let d = 0;
   let c = 0;
+  const maxIterations = (debtors.length + creditors.length) * 2 + 10;
+  let iterations = 0;
 
   while (d < debtors.length && c < creditors.length) {
+    iterations += 1;
+    if (iterations > maxIterations) {
+      throw new Error(
+        `Settlement minimization failed: exceeded safety limit of ${maxIterations} iterations with ${debtors.length - d} debtors and ${creditors.length - c} creditors remaining. Refusing to return invalid settlement.`,
+      );
+    }
+
     const debtor = debtors[d];
     const creditor = creditors[c];
+
+    // Guarantee integer minor units (paise) for exact arithmetic
+    debtor.amount = Math.round(debtor.amount);
+    creditor.amount = Math.round(creditor.amount);
+
     const amount = Math.min(debtor.amount, creditor.amount);
 
     if (amount > 0) {
@@ -86,8 +100,8 @@ export function minimizeTransfers(balances: Balance[], epsilon = 0): Transfer[] 
       creditor.amount -= amount;
     }
 
-    if (debtor.amount === 0) d += 1;
-    if (creditor.amount === 0) c += 1;
+    if (debtor.amount <= 0) d += 1;
+    if (creditor.amount <= 0) c += 1;
   }
 
   return transfers;

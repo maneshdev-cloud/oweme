@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PersonAvatar } from '@/components/person-avatar';
 import { createSettlement } from '@/lib/actions/expenses';
-import { formatINR, parseAmountInput, toAmountString } from '@/lib/money';
+import { formatINR, parseAmountInput, sanitizeAmountInput, toAmountString } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import type { Person } from '@/lib/types';
 
@@ -43,9 +43,18 @@ export function SettleUpDialog({
   const minor = parseAmountInput(amount);
   const firstName = person.full_name.split(' ')[0];
 
+  const amountWarning =
+    amount && minor !== null
+      ? minor < 10
+        ? 'Minimum amount is ₹0.10'
+        : minor > 500000
+          ? 'Maximum amount is ₹5,000'
+          : null
+      : null;
+
   function submit() {
-    if (minor === null || minor <= 0) {
-      setError('Enter an amount greater than zero.');
+    if (minor === null || minor < 10 || minor > 500000) {
+      setError('Enter an amount between ₹0.10 and ₹5,000.');
       return;
     }
     setError(null);
@@ -66,7 +75,11 @@ export function SettleUpDialog({
       }
 
       requestId.current = crypto.randomUUID();
-      toast.success('Recorded — they’ll be asked to confirm it landed.');
+      toast.success(
+        direction === 'i_paid'
+          ? `Payment recorded · To give ${formatINR(minor)}`
+          : `Payment recorded · To receive ${formatINR(minor)}`,
+      );
       onOpenChange(false);
       router.push(`/settlements/${result.data.id}`);
       router.refresh();
@@ -104,19 +117,23 @@ export function SettleUpDialog({
             <Input
               id="settle-amount"
               inputMode="decimal"
+              maxLength={7}
               value={amount}
-              onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
+              onChange={(event) => setAmount(sanitizeAmountInput(event.target.value))}
               placeholder="0.00"
               className="tabular"
             />
           </div>
+          {amountWarning && (
+            <p className="text-xs font-medium text-destructive">{amountWarning}</p>
+          )}
           {suggested > 0 && (
             <button
               type="button"
               className="text-xs text-primary underline-offset-4 hover:underline"
-              onClick={() => setAmount((suggested / 100).toFixed(2).replace(/\.00$/, ''))}
+              onClick={() => setAmount(sanitizeAmountInput((suggested / 100).toFixed(2).replace(/\.00$/, '')))}
             >
-              Use the full balance · {formatINR(suggested)}
+              Use the full balance · {formatINR(Math.min(suggested, 500000))}
             </button>
           )}
         </div>
@@ -129,22 +146,28 @@ export function SettleUpDialog({
               aria-pressed={direction === 'i_paid'}
               onClick={() => setDirection('i_paid')}
               className={cn(
-                'rounded-xl border px-3 py-2.5 text-sm font-medium',
-                direction === 'i_paid' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent',
+                'flex flex-col items-start rounded-xl border p-2.5 text-left text-sm font-medium transition-colors',
+                direction === 'i_paid' ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-input hover:bg-accent',
               )}
             >
-              I paid {firstName}
+              <span className="font-semibold">I paid {firstName}</span>
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-negative">
+                ↗ To give
+              </span>
             </button>
             <button
               type="button"
               aria-pressed={direction === 'they_paid'}
               onClick={() => setDirection('they_paid')}
               className={cn(
-                'rounded-xl border px-3 py-2.5 text-sm font-medium',
-                direction === 'they_paid' ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent',
+                'flex flex-col items-start rounded-xl border p-2.5 text-left text-sm font-medium transition-colors',
+                direction === 'they_paid' ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-input hover:bg-accent',
               )}
             >
-              {firstName} paid me
+              <span className="font-semibold">{firstName} paid me</span>
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-positive">
+                ↙ To receive
+              </span>
             </button>
           </div>
         </div>

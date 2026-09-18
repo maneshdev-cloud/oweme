@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ConnectionBanner />
         <AnnouncementBanner settings={settings} />
 
-        <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 pb-28 pt-4 lg:pb-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 pb-36 pt-4 lg:pb-10">
           <aside className="hidden w-60 shrink-0 flex-col gap-6 lg:flex">
             <Link href="/home" className="px-3 py-2">
               <Brand />

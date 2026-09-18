@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sharesSumToTotal, splitEqually, splitEquallyFromAmount } from '@/lib/split';
-import { formatINR, formatINRCompact, parseAmountInput, toAmountString, toMinor } from '@/lib/money';
+import { formatINR, formatINRCompact, parseAmountInput, sanitizeAmountInput, toAmountString, toMinor } from '@/lib/money';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -110,5 +110,19 @@ describe('money', () => {
     expect(parseAmountInput('')).toBeNull();
     expect(parseAmountInput('₹ 28')).toBe(2800);
     expect(parseAmountInput('1,299.99')).toBe(129_999);
+  });
+
+  it('clamps and restricts input to bounds with sanitizeAmountInput', () => {
+    // Clamps extreme amounts to ₹5,000 max
+    expect(sanitizeAmountInput('5000000000000000')).toBe('5000');
+    expect(sanitizeAmountInput('99999')).toBe('5000');
+    expect(sanitizeAmountInput('5000')).toBe('5000');
+    expect(sanitizeAmountInput('5000.00')).toBe('5000.00');
+    // Enforces valid characters and decimals
+    expect(sanitizeAmountInput('28.50')).toBe('28.50');
+    expect(sanitizeAmountInput('28.509')).toBe('28.50');
+    expect(sanitizeAmountInput('abc28.5xyz')).toBe('28.5');
+    expect(sanitizeAmountInput('0.1')).toBe('0.1');
+    expect(sanitizeAmountInput('0.10')).toBe('0.10');
   });
 });

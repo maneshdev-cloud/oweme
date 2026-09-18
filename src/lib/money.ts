@@ -79,3 +79,27 @@ export function parseAmountInput(input: string): number | null {
     return null;
   }
 }
+
+/** Clamps and restricts raw user typing to max ₹5,000, 4 whole digits, 2 decimals */
+export function sanitizeAmountInput(rawVal: string, max = 5000): string {
+  let cleaned = rawVal.replace(/[^\d.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+  let whole = parts[0] ?? '';
+  let decimal = parts[1];
+
+  if (whole.length > 4) {
+    whole = whole.slice(0, 4);
+  }
+  if (decimal !== undefined && decimal.length > 2) {
+    decimal = decimal.slice(0, 2);
+  }
+  cleaned = decimal !== undefined ? `${whole}.${decimal}` : whole;
+
+  const num = parseFloat(cleaned);
+  if (!Number.isNaN(num) && num > max) {
+    return String(max);
+  }
+  return cleaned;
+}
+

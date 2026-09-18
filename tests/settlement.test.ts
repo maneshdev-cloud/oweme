@@ -258,6 +258,28 @@ describe('per-user helpers', () => {
     expect(totalIncoming(transfers, A) + totalIncoming(transfers, B)).toBe(7500);
     expect(totalOutgoing(transfers, A)).toBe(0);
   });
+
+  it('guarantees termination without infinite loop on fractional, zero, or edge case amounts', () => {
+    const badBalances: Balance[] = [
+      { userId: A, amount: 0.0000001 },
+      { userId: B, amount: -0.0000001 },
+      { userId: C, amount: 0 },
+    ];
+    // Must round paise to integer 0 and terminate immediately with 0 transfers
+    const result = minimizeTransfers(badBalances);
+    expect(result).toEqual([]);
+  });
+
+  it('reconciles exactly to zero using integer paise arithmetic', () => {
+    const balances: Balance[] = [
+      { userId: A, amount: 12345 }, // ₹123.45
+      { userId: B, amount: -7000 },  // ₹70.00
+      { userId: C, amount: -5345 },  // ₹53.45
+    ];
+    const transfers = minimizeTransfers(balances);
+    expectAllSettled(balances, transfers);
+    expect(transfers.every(t => Number.isInteger(t.amount))).toBe(true);
+  });
 });
 
 function sum(values: number[]): number {

@@ -13,7 +13,7 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { createExpense } from '@/lib/actions/expenses';
 import { CATEGORIES } from '@/lib/constants';
 import { getCategoryIcon } from '@/lib/category-icons';
-import { formatINR, parseAmountInput, toAmountString, toMinor } from '@/lib/money';
+import { formatINR, parseAmountInput, sanitizeAmountInput, toAmountString, toMinor } from '@/lib/money';
 import { searchPeople } from '@/lib/queries/social-actions';
 import { cn } from '@/lib/utils';
 import type { FriendRow, Person } from '@/lib/types';
@@ -76,6 +76,10 @@ export function AddExpenseDialog({
   useEffect(() => {
     if (!open) {
       setStep(initialFriendId ? 'details' : 'friend');
+      setSelected(() => {
+        const friend = friends.find((row) => row.friend_id === initialFriendId);
+        return friend ? toPerson(friend) : null;
+      });
       setAmount('');
       setDescription('');
       setCategory('Printout');
@@ -85,17 +89,17 @@ export function AddExpenseDialog({
       setError(null);
       requestId.current = crypto.randomUUID();
     }
-  }, [open, initialFriendId]);
+  }, [open, initialFriendId, friends]);
 
   // Debounced people search — only when the friend list itself has no match.
   useEffect(() => {
-    if (!open || step !== 'friend') return;
     const trimmed = query.trim();
-    if (trimmed.length < 2) {
+    if (trimmed.length < 2 || !open || step !== 'friend') {
       setResults([]);
       setSearching(false);
       return;
     }
+
     setSearching(true);
     const handle = setTimeout(async () => {
       const found = await searchPeople(trimmed);
@@ -115,7 +119,15 @@ export function AddExpenseDialog({
   }, [friends, query]);
 
   const minor = parseAmountInput(amount);
-  const canSubmit = Boolean(selected) && minor !== null && minor > 0 && description.trim().length > 0 && online;
+  const isAmountValid = minor !== null && minor >= 10 && minor <= 500000;
+  const canSubmit = Boolean(selected) && isAmountValid && description.trim().length > 0 && online;
+
+  const amountWarning = useMemo(() => {
+    if (!amount || minor === null) return null;
+    if (minor < 10) return 'Minimum amount is ₹0.10';
+    if (minor > 500000) return 'Maximum amount is ₹5,000';
+    return null;
+  }, [amount, minor]);
 
   function pickFriend(person: Person) {
     setSelected(person);
@@ -129,8 +141,8 @@ export function AddExpenseDialog({
       setError('You’re offline. Adding an expense needs a connection.');
       return;
     }
-    if (minor === null || minor <= 0) {
-      setError('Enter an amount greater than zero.');
+    if (minor === null || minor < 10 || minor > 500000) {
+      setError('Enter an amount between ₹0.10 and ₹5,000.');
       return;
     }
     if (!description.trim()) {
@@ -158,7 +170,9 @@ export function AddExpenseDialog({
       toast.success(
         result.data.duplicate
           ? 'That expense was already saved — opened the existing one.'
-          : `Added ${formatINR(minor)} · ${description.trim()}`,
+          : direction === 'i_paid'
+            ? `Added · To receive ${formatINR(minor)}`
+            : `Added · To give ${formatINR(minor)}`,
       );
       requestId.current = crypto.randomUUID();
       onOpenChange(false);
@@ -284,18 +298,29 @@ export function AddExpenseDialog({
               </button>
             )}
 
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-medium text-muted-foreground">₹</span>
-              <input
-                ref={amountRef}
-                inputMode="decimal"
-                autoComplete="off"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))}
-                placeholder="28"
-                aria-label="Amount in rupees"
-                className="w-full border-0 bg-transparent p-0 text-4xl font-semibold tabular outline-none placeholder:text-muted-foreground/40"
-              />
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-medium text-muted-foreground">₹</span>
+                <input
+                  ref={amountRef}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  maxLength={7}
+                  value={amount}
+                  onChange={(event) => setAmount(sanitizeAmountInput(event.target.value))}
+                  onFocus={(e) => {
+                    setTimeout(() => {
+                      e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
+                  }}
+                  placeholder="28"
+                  aria-label="Amount in rupees"
+                  className="w-full border-0 bg-transparent p-0 text-4xl font-semibold tabular outline-none placeholder:text-muted-foreground/40"
+                />
+              </div>
+              {amountWarning && (
+                <p className="text-xs font-medium text-destructive">{amountWarning}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -304,6 +329,11 @@ export function AddExpenseDialog({
                 id="expense-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
+                onFocus={(e) => {
+                  setTimeout(() => {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }, 100);
+                }}
                 placeholder="Printout"
                 maxLength={200}
                 autoComplete="off"
@@ -344,24 +374,30 @@ export function AddExpenseDialog({
                   onClick={() => setDirection('i_paid')}
                   aria-pressed={direction === 'i_paid'}
                   className={cn(
-                    'rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors',
-                    direction === 'i_paid' ? 'border-primary bg-primary/10 text-foreground' : 'border-input hover:bg-accent',
+                    'flex flex-col items-start rounded-xl border p-2.5 text-left text-sm font-medium transition-colors',
+                    direction === 'i_paid' ? 'border-primary bg-primary/10 text-foreground ring-1 ring-primary' : 'border-input hover:bg-accent',
                   )}
                 >
-                  I paid {minor ? formatINR(minor) : ''}
+                  <span className="font-semibold">I paid {minor ? formatINR(minor) : ''}</span>
+                  <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-positive">
+                    ↙ To receive
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setDirection('they_paid')}
                   aria-pressed={direction === 'they_paid'}
                   className={cn(
-                    'rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors',
+                    'flex flex-col items-start rounded-xl border p-2.5 text-left text-sm font-medium transition-colors',
                     direction === 'they_paid'
-                      ? 'border-primary bg-primary/10 text-foreground'
+                      ? 'border-primary bg-primary/10 text-foreground ring-1 ring-primary'
                       : 'border-input hover:bg-accent',
                   )}
                 >
-                  {selected ? selected.full_name.split(' ')[0] : 'They'} paid {minor ? formatINR(minor) : ''}
+                  <span className="font-semibold">{selected ? selected.full_name.split(' ')[0] : 'They'} paid {minor ? formatINR(minor) : ''}</span>
+                  <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-negative">
+                    ↗ To give
+                  </span>
                 </button>
               </div>
             </div>

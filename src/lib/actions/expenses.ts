@@ -400,7 +400,8 @@ export async function respondToPaymentFromNotification(input: {
     if (!res.ok) return res;
   }
 
-  await supabase.from('notifications').update({ is_read: true }).eq('id', input.notificationId);
+  // Delete notification server-side so it does not reappear on reload
+  await supabase.from('notifications').delete().eq('id', input.notificationId);
 
   revalidatePath('/notifications');
   revalidatePath('/home');

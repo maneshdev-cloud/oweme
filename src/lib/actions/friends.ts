@@ -108,6 +108,14 @@ export async function respondToFriendRequestFromNotification(input: unknown): Pr
   const { error } = await supabase.from('friendships').update({ status }).eq('id', request.id);
   if (error) return fail(error.message);
 
+  // Mark/delete the underlying notification server-side so it doesn't reappear on reload
+  await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('type', 'friend_request')
+    .eq('related_user_id', parsed.data.addresseeId);
+
   revalidatePath('/friends');
   revalidatePath('/home');
   revalidatePath('/notifications');

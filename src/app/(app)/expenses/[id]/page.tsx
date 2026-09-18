@@ -75,7 +75,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                   {debtor.full_name} {debtor.id === user.id && <span className="text-muted-foreground">(you)</span>}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {expense.status === 'CONFIRMED' ? 'Settled' : `Owes ${formatINR(amount)}`}
+                  {expense.status === 'CONFIRMED'
+                    ? 'Settled'
+                    : youArePayer
+                      ? `To receive ${formatINR(amount)}`
+                      : `To give ${formatINR(amount)}`}
                 </p>
               </div>
             </div>

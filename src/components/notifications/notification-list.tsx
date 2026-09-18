@@ -16,15 +16,24 @@ const FILTERS = [
 
 export function NotificationList({ notifications }: { notifications: NotificationView[] }) {
   const router = useRouter();
+  const [items, setItems] = useState<NotificationView[]>(notifications);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['value']>('all');
   const [pending, startTransition] = useTransition();
   const clearedOnVisit = useRef(false);
 
-  const unread = notifications.filter((notification) => !notification.is_read);
+  useEffect(() => {
+    setItems(notifications);
+  }, [notifications]);
+
+  const unread = items.filter((notification) => !notification.is_read);
   const visible = useMemo(
-    () => (filter === 'unread' ? unread : notifications),
-    [filter, notifications, unread],
+    () => (filter === 'unread' ? unread : items),
+    [filter, items, unread],
   );
+
+  const handleDismiss = (id: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
 
   useEffect(() => {
     if (unread.length > 0 && !clearedOnVisit.current) {
@@ -42,12 +51,13 @@ export function NotificationList({ notifications }: { notifications: Notificatio
         toast.error(result.error);
         return;
       }
+      setItems((prev) => prev.map((item) => ({ ...item, is_read: true })));
       toast.success(result.data.cleared > 0 ? `Cleared ${result.data.cleared}.` : 'Nothing left to clear.');
       router.refresh();
     });
   }
 
-  if (notifications.length === 0) {
+  if (items.length === 0) {
     return (
       <EmptyState
         icon={BellOff}
@@ -91,7 +101,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
       ) : (
         <ul className="space-y-2">
           {visible.map((notification) => (
-            <NotificationItem key={notification.id} notification={notification} />
+            <NotificationItem key={notification.id} notification={notification} onDismiss={handleDismiss} />
           ))}
         </ul>
       )}

@@ -8,7 +8,7 @@ import { SettlementActions } from '@/components/settlement-actions';
 import { requireUser } from '@/lib/supabase/server';
 import { getSettlementDetail } from '@/lib/queries/social';
 import { formatINR, toMinor } from '@/lib/money';
-import { timeAgo } from '@/lib/utils';
+import { cn, timeAgo } from '@/lib/utils';
 
 export default async function SettlementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +37,17 @@ export default async function SettlementPage({ params }: { params: Promise<{ id:
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-3xl font-semibold tabular">{formatINR(amount)}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-3xl font-semibold tabular">{formatINR(amount)}</p>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
+                youAreReceiver ? 'bg-positive/10 text-positive' : 'bg-negative/10 text-negative',
+              )}
+            >
+              {youAreReceiver ? '↙ To receive' : '↗ To give'}
+            </span>
+          </div>
 
           <div className="flex items-center gap-3 rounded-2xl border p-3">
             <PersonAvatar person={payer} className="h-9 w-9" />

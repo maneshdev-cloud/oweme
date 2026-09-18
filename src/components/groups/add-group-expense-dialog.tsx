@@ -36,7 +36,7 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { createGroupExpense } from '@/lib/actions/expenses';
 import { CATEGORIES } from '@/lib/constants';
 import { getCategoryIcon } from '@/lib/category-icons';
-import { formatINR, parseAmountInput, toAmountString } from '@/lib/money';
+import { formatINR, parseAmountInput, sanitizeAmountInput, toAmountString } from '@/lib/money';
 import { splitEqually } from '@/lib/split';
 import { minimizeTransfers, type Balance } from '@/lib/settlement';
 import type { GroupMemberRow } from '@/lib/types';
@@ -257,6 +257,14 @@ export function AddGroupExpenseDialog({
       issues.push('Enter a total bill amount.');
       return issues;
     }
+    if (totalMinor < 10) {
+      issues.push('Minimum total bill is ₹0.10.');
+      return issues;
+    }
+    if (totalMinor > 500000) {
+      issues.push('Maximum total bill is ₹5,000.');
+      return issues;
+    }
     if (!description.trim()) {
       issues.push('Enter what the expense was for.');
     }
@@ -439,9 +447,10 @@ export function AddGroupExpenseDialog({
                 <Input
                   id="group-expense-amount"
                   inputMode="decimal"
+                  maxLength={7}
                   value={totalAmount}
                   onChange={(event) =>
-                    setTotalAmount(event.target.value.replace(/[^\d.]/g, ''))
+                    setTotalAmount(sanitizeAmountInput(event.target.value))
                   }
                   placeholder="800"
                   className="pl-7 tabular font-medium h-11"
@@ -590,10 +599,11 @@ export function AddGroupExpenseDialog({
                             <span className="text-xs text-muted-foreground">₹</span>
                             <Input
                               inputMode="decimal"
+                              maxLength={7}
                               placeholder="0"
                               value={paidVal}
                               onChange={(e) => {
-                                const val = e.target.value.replace(/[^\d.]/g, '');
+                                const val = sanitizeAmountInput(e.target.value);
                                 setPayerAmounts((prev) => ({
                                   ...prev,
                                   [member.user_id]: val,
@@ -763,10 +773,11 @@ export function AddGroupExpenseDialog({
                             <span className="text-xs text-muted-foreground">₹</span>
                             <Input
                               inputMode="decimal"
+                              maxLength={7}
                               placeholder="0"
                               value={shareVal}
                               onChange={(e) => {
-                                const val = e.target.value.replace(/[^\d.]/g, '');
+                                const val = sanitizeAmountInput(e.target.value);
                                 setShareAmounts((prev) => ({
                                   ...prev,
                                   [member.user_id]: val,

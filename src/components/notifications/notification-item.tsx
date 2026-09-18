@@ -72,7 +72,13 @@ export type NotificationView = {
  *  • if the thing it points at is gone (purged archive, cancelled record), it
  *    says so instead of dropping the user on a 404.
  */
-export function NotificationItem({ notification }: { notification: NotificationView }) {
+export function NotificationItem({
+  notification,
+  onDismiss,
+}: {
+  notification: NotificationView;
+  onDismiss?: (id: string) => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const Icon = ICONS[notification.type] ?? BellRing;
@@ -93,6 +99,7 @@ export function NotificationItem({ notification }: { notification: NotificationV
   }
 
   function remove() {
+    onDismiss?.(notification.id);
     startTransition(async () => {
       const result = await dismissNotification(notification.id);
       if (!result.ok) {
@@ -105,6 +112,7 @@ export function NotificationItem({ notification }: { notification: NotificationV
 
   function respond(response: 'accept' | 'decline') {
     if (!notification.related_user_id) return;
+    onDismiss?.(notification.id);
     startTransition(async () => {
       const result = await respondToFriendRequestFromNotification({
         addresseeId: notification.related_user_id,
@@ -120,6 +128,7 @@ export function NotificationItem({ notification }: { notification: NotificationV
   }
 
   function respondPayment(response: 'yes' | 'no') {
+    onDismiss?.(notification.id);
     startTransition(async () => {
       const result = await respondToPaymentFromNotification({
         notificationId: notification.id,
@@ -141,56 +150,78 @@ export function NotificationItem({ notification }: { notification: NotificationV
   return (
     <li
       className={cn(
-        'flex items-start gap-3 rounded-2xl border bg-card p-3.5 transition-colors',
+        'group flex flex-col gap-3 rounded-2xl border bg-card p-3.5 transition-colors sm:flex-row sm:items-start',
         !notification.is_read && 'border-primary/40 bg-primary/5',
       )}
     >
-      <button type="button" onClick={open} disabled={pending} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', tone)} aria-hidden />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className={cn('truncate text-sm', !notification.is_read ? 'font-semibold' : 'font-medium')}>
-              {notification.title}
-            </span>
-            {!notification.is_read && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
-                <Sparkles className="h-3 w-3" aria-hidden /> Unread
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <button
+          type="button"
+          onClick={open}
+          disabled={pending}
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', tone)} aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className={cn('truncate text-sm', !notification.is_read ? 'font-semibold' : 'font-medium')}>
+                {notification.title}
               </span>
-            )}
+              {!notification.is_read && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                  <Sparkles className="h-3 w-3" aria-hidden /> Unread
+                </span>
+              )}
+            </span>
+            {notification.body && <span className="mt-0.5 block text-sm text-muted-foreground">{notification.body}</span>}
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {timeAgo(notification.created_at)}
+              {!notification.resolvable && ' · no longer available'}
+            </span>
           </span>
-          {notification.body && <span className="mt-0.5 block text-sm text-muted-foreground">{notification.body}</span>}
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {timeAgo(notification.created_at)}
-            {!notification.resolvable && ' · no longer available'}
-          </span>
-        </span>
-      </button>
+        </button>
 
-      {actionableFriendRequest && (
-        <div className="flex shrink-0 gap-1.5 self-end">
-          <Button size="sm" variant="positive" onClick={() => respond('accept')} disabled={pending}>
-            Accept
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => respond('decline')} disabled={pending}>
-            Decline
-          </Button>
-        </div>
-      )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={remove}
+          disabled={pending}
+          className="h-8 w-8 p-0 text-muted-foreground sm:hidden shrink-0"
+          aria-label={`Dismiss “${notification.title}”`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
 
-      {isPaymentActionable && (
-        <div className="flex shrink-0 items-center gap-1.5 self-end">
-          <Button size="sm" variant="positive" onClick={() => respondPayment('yes')} disabled={pending}>
-            <Check className="h-3.5 w-3.5" aria-hidden /> Yes
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => respondPayment('no')}
-            disabled={pending}
-          >
-            <X className="h-3.5 w-3.5" aria-hidden /> No
-          </Button>
+      {(actionableFriendRequest || isPaymentActionable) && (
+        <div className="flex w-full sm:w-auto items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-t-0 sm:pt-0 sm:self-center shrink-0">
+          {actionableFriendRequest && (
+            <div className="flex w-full sm:w-auto gap-2">
+              <Button size="sm" variant="positive" className="flex-1 sm:flex-initial" onClick={() => respond('accept')} disabled={pending}>
+                Accept
+              </Button>
+              <Button size="sm" variant="ghost" className="flex-1 sm:flex-initial" onClick={() => respond('decline')} disabled={pending}>
+                Decline
+              </Button>
+            </div>
+          )}
+
+          {isPaymentActionable && (
+            <div className="flex w-full sm:w-auto items-center gap-2">
+              <Button size="sm" variant="positive" className="flex-1 sm:flex-initial" onClick={() => respondPayment('yes')} disabled={pending}>
+                <Check className="h-3.5 w-3.5" aria-hidden /> Yes
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 sm:flex-initial border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => respondPayment('no')}
+                disabled={pending}
+              >
+                <X className="h-3.5 w-3.5" aria-hidden /> No
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -199,7 +230,7 @@ export function NotificationItem({ notification }: { notification: NotificationV
         variant="ghost"
         onClick={remove}
         disabled={pending}
-        className="text-muted-foreground"
+        className="hidden sm:inline-flex text-muted-foreground shrink-0 self-center"
         aria-label={`Dismiss “${notification.title}”`}
       >
         <Trash2 className="h-4 w-4" />

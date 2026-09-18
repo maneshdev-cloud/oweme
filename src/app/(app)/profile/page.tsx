@@ -9,6 +9,7 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { ProfileForm } from '@/components/profile/profile-form';
 import { NotificationPreferences } from '@/components/profile/notification-preferences';
 import { SignOutButton } from '@/components/profile/sign-out-button';
+import { ReportIssueButton } from '@/components/report-issue-button';
 import { requireUser, createClient } from '@/lib/supabase/server';
 import { getMyProfile, getUnreadNotificationCount, isAdmin } from '@/lib/queries/core';
 import { formatDate } from '@/lib/utils';
@@ -154,14 +155,7 @@ export default async function ProfilePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button asChild variant="outline">
-            <a
-              href="mailto:minisotechsolutions@gmail.com?subject=OweMe%20Issue%20Report&body=Hi%20OweMe%20team%2C%0A%0AI%20found%20an%20issue%3A%0A%0A"
-            >
-              <MailWarning className="mr-2 h-4 w-4" aria-hidden />
-              Email us
-            </a>
-          </Button>
+          <ReportIssueButton />
           <p className="text-xs text-muted-foreground">
             Opens your default email app — Gmail, Outlook, Apple Mail, or whichever you use.
           </p>
