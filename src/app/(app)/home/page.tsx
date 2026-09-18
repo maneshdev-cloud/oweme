@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { formatINR, toMinor } from '@/lib/money';
 import { getDashboard, getMyProfile } from '@/lib/queries/core';
 import { sendFriendRequest } from '@/lib/actions/friends';
+import { ReportIssueLink } from '@/components/report-issue-button';
 
 export const metadata = { title: 'Home' };
 
@@ -232,12 +233,7 @@ export default async function HomePage() {
       <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <MailWarning className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span>Something wrong?</span>
-        <a
-          href="mailto:minisotechsolutions@gmail.com?subject=OweMe%20Issue%20Report&body=Hi%20OweMe%20team%2C%0A%0AI%20found%20an%20issue%3A%0A%0A"
-          className="font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Report an issue
-        </a>
+        <ReportIssueLink />
       </div>
     </div>
   );

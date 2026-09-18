@@ -157,7 +157,7 @@ export default async function ProfilePage() {
         <CardContent className="space-y-3">
           <ReportIssueButton />
           <p className="text-xs text-muted-foreground">
-            Opens your default email app — Gmail, Outlook, Apple Mail, or whichever you use.
+            Opens Gmail in browser, your email app, or copy our support email.
           </p>
         </CardContent>
       </Card>
