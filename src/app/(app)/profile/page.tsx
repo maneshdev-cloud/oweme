@@ -150,7 +150,7 @@ export default async function ProfilePage() {
             <MailWarning className="h-4 w-4" aria-hidden /> Report an issue
           </CardTitle>
           <CardDescription>
-            Found a bug or something doesn't feel right? Let us know — we read every message.
+            Found a bug or something doesn&apos;t feel right? Let us know — we read every message.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
