@@ -31,7 +31,7 @@ export function SignOutButton() {
 
   return (
     <Button
-      variant="outline"
+      variant="destructive"
       loading={loading}
       disabled={loading}
       onClick={handleSignOut}

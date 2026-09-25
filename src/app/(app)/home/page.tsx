@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BellRing, ExternalLink, HandshakeIcon, MailWarning, ReceiptText, ShieldCheck, UserPlus } from 'lucide-react';
+import { ArrowRight, BellRing, ExternalLink, HandshakeIcon, MailWarning, ReceiptText, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
@@ -8,16 +8,27 @@ import { ExpenseCard } from '@/components/expense-card';
 import { PersonAvatar } from '@/components/person-avatar';
 import { StatusBadge } from '@/components/status-badge';
 import { formatINR, toMinor } from '@/lib/money';
-import { getDashboard, getMyProfile } from '@/lib/queries/core';
+import { getUnsettledAgingText, isExpenseUnsettled } from '@/lib/nudge';
+import { getAppSettings, getDashboard, getMyProfile } from '@/lib/queries/core';
+import { getFriends } from '@/lib/queries/social';
 import { sendFriendRequest } from '@/lib/actions/friends';
 import { ReportIssueLink } from '@/components/report-issue-button';
+import { AddExpenseButton } from '@/components/add-expense/add-expense-fab';
+import { DashboardSettleUpButton } from '@/components/dashboard-settle-up-button';
+import { DashboardWaitingCard } from '@/components/dashboard-waiting-card';
 
 export const metadata = { title: 'Home' };
 
 export default async function HomePage() {
-  const [dashboard, profile] = await Promise.all([getDashboard(), getMyProfile()]);
+  const [dashboard, profile, friends, settings] = await Promise.all([
+    getDashboard(),
+    getMyProfile(),
+    getFriends(),
+    getAppSettings(),
+  ]);
   const firstName = profile?.full_name.split(' ')[0] ?? 'there';
   const { totals } = dashboard;
+  const creationDisabled = settings.read_only_mode || !settings.expense_creation_enabled;
 
   return (
     <div className="space-y-6">
@@ -32,6 +43,21 @@ export default async function HomePage() {
                 ? 'You’re all square with everyone.'
                 : 'Here’s where things stand right now.'}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <AddExpenseButton
+                friends={friends}
+                variant="inline"
+                size="sm"
+                label="Add expense"
+                disabled={creationDisabled}
+              />
+              <DashboardSettleUpButton
+                friends={friends}
+                balances={dashboard.balances}
+                size="sm"
+                variant="outline"
+              />
+            </div>
           </div>
           <a
             href="https://manesh.pages.dev/"
@@ -51,10 +77,10 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-semibold tabular text-positive">{formatINR(toMinor(totals.you_are_owed))}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                From {dashboard.balances.filter((row) => row.balance > 0).length} friend
-                {dashboard.balances.filter((row) => row.balance > 0).length === 1 ? '' : 's'}
-              </p>
+              <div className="mt-2.5 space-y-0.5 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+                <p>Friends · <span className="font-medium text-foreground">{formatINR(toMinor(totals.friends_owed))}</span></p>
+                <p>Groups · <span className="font-medium text-foreground">{formatINR(toMinor(totals.groups_owed))}</span></p>
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -63,23 +89,25 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-semibold tabular text-negative">{formatINR(toMinor(totals.you_owe))}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                To {dashboard.balances.filter((row) => row.balance < 0).length} friend
-                {dashboard.balances.filter((row) => row.balance < 0).length === 1 ? '' : 's'}
-              </p>
+              <div className="mt-2.5 space-y-0.5 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+                <p>Friends · <span className="font-medium text-foreground">{formatINR(toMinor(totals.friends_owe))}</span></p>
+                <p>Groups · <span className="font-medium text-foreground">{formatINR(toMinor(totals.groups_owe))}</span></p>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Open items</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Needs your response</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-semibold tabular">{dashboard.openExpenses.length}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {dashboard.waitingOnYou.length > 0
-                  ? `${dashboard.waitingOnYou.length} waiting on your confirmation`
-                  : 'Nothing needs your confirmation'}
-              </p>
+              <p className="text-2xl font-semibold tabular">{dashboard.needsResponseCount}</p>
+              <div className="mt-2.5 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+                <p>
+                  {dashboard.needsResponseCount > 0
+                    ? `${dashboard.needsResponseCount} waiting on your response`
+                    : 'Nothing needs your response'}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -92,26 +120,8 @@ export default async function HomePage() {
             Did you receive these payments?
           </h2>
           <div className="space-y-2">
-            {dashboard.waitingOnYou.map((expense) => (
-              <Card key={expense.id} className="border-primary/40">
-                <CardContent className="flex items-center gap-3 p-4">
-                  <PersonAvatar person={expense.counterparty} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {expense.counterparty.full_name.split(' ')[0]} says they paid you{' '}
-                      {formatINR(toMinor(expense.amount))}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {expense.description} · <StatusBadge status={expense.status} className="align-middle" />
-                    </p>
-                  </div>
-                  <Button asChild size="sm">
-                    <Link href={`/expenses/${expense.id}`}>
-                      Confirm <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+            {dashboard.waitingOnYou.map((item) => (
+              <DashboardWaitingCard key={`${item.kind}-${item.id}`} item={item} />
             ))}
           </div>
         </section>
@@ -137,23 +147,39 @@ export default async function HomePage() {
           />
         ) : (
           <ul className="space-y-2">
-            {dashboard.balances.map((row) => (
-              <li key={`${row.counterparty.id}-${row.currency}`}>
-                <Link
-                  href={`/friends?friend=${row.counterparty.id}`}
-                  className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 transition-colors hover:bg-accent/40"
-                >
-                  <PersonAvatar person={row.counterparty} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{row.counterparty.full_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {row.balance > 0 ? 'To receive' : 'To give'}
-                    </p>
-                  </div>
-                  <Amount minor={toMinor(row.balance)} />
-                </Link>
-              </li>
-            ))}
+            {dashboard.balances.map((row) => {
+              const cpExpenses = dashboard.openExpenses.filter(
+                (e) => e.counterparty.id === row.counterparty.id && isExpenseUnsettled(e.status)
+              );
+              const oldestExp = cpExpenses.reduce<typeof cpExpenses[0] | null>(
+                (oldest, curr) => (!oldest || new Date(curr.created_at) < new Date(oldest.created_at) ? curr : oldest),
+                null
+              );
+              const nudge = oldestExp ? getUnsettledAgingText(oldestExp.created_at) : null;
+
+              return (
+                <li key={`${row.counterparty.id}-${row.currency}`}>
+                  <Link
+                    href={`/friends?friend=${row.counterparty.id}`}
+                    className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 transition-colors hover:bg-accent/40"
+                  >
+                    <PersonAvatar person={row.counterparty} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{row.counterparty.full_name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{row.balance > 0 ? 'To receive' : 'To give'}</span>
+                        {nudge && (
+                          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                            {nudge}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Amount minor={toMinor(row.balance)} />
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -223,12 +249,6 @@ export default async function HomePage() {
           </ul>
         </section>
       )}
-
-      <p className="flex items-center gap-2 rounded-2xl bg-secondary p-3 text-xs text-secondary-foreground">
-        <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
-        Every expense is stored with a full history, and only you and the other person can read it.
-        {totals.net !== 0 ? ` Your net position is ${formatINR(toMinor(totals.net))}.` : ''}
-      </p>
 
       <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <MailWarning className="h-3.5 w-3.5 shrink-0" aria-hidden />

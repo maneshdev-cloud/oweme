@@ -9,6 +9,7 @@ const PROTECTED_PREFIXES = [
   '/groups',
   '/expenses',
   '/settlements',
+  '/settle-up',
   '/notifications',
   '/history',
   '/profile',

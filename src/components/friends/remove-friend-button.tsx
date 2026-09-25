@@ -54,8 +54,8 @@ export function RemoveFriendButton({
           title={friendName ? `Remove ${friendName}` : 'Remove friend'}
         >
           <UserMinus className="h-4 w-4" />
-          <span className="hidden sm:inline">Remove friend</span>
-          <span className="sr-only sm:hidden">Remove friend</span>
+          <span className="hidden lg:inline">Remove friend</span>
+          <span className="sr-only lg:hidden">Remove friend</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

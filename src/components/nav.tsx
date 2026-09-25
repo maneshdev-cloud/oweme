@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, History, Home, User, Users, Wallet } from 'lucide-react';
+import { Bell, Handshake, History, Home, User, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_NAME } from '@/lib/constants';
 
@@ -10,6 +10,7 @@ const ITEMS = [
   { href: '/home', label: 'Home', icon: Home },
   { href: '/friends', label: 'Friends', icon: Users },
   { href: '/groups', label: 'Groups', icon: Wallet },
+  { href: '/settle-up', label: 'Settle up', icon: Handshake },
   { href: '/notifications', label: 'Alerts', icon: Bell },
   { href: '/profile', label: 'Profile', icon: User },
 ] as const;
@@ -33,6 +34,7 @@ export function BottomNav({ unreadCount }: { unreadCount: number }) {
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                prefetch={true}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-[11px] font-medium transition-colors',
@@ -72,6 +74,7 @@ export function SidebarNav({ unreadCount }: { unreadCount: number }) {
             <li key={item.href}>
               <Link
                 href={item.href}
+                prefetch={true}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
@@ -92,6 +95,7 @@ export function SidebarNav({ unreadCount }: { unreadCount: number }) {
         <li className="pt-2">
           <Link
             href="/history"
+            prefetch={true}
             className={cn(
               'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
               isActive(pathname, '/history')

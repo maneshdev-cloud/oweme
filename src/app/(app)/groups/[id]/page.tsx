@@ -12,6 +12,7 @@ import { AddGroupExpenseDialog } from '@/components/groups/add-group-expense-dia
 import { GroupMemberActions } from '@/components/groups/group-member-actions';
 import { DeleteGroupDialog } from '@/components/groups/delete-group-dialog';
 import { SettleUpButton } from '@/components/settle-up-dialog';
+import { TripSettledSummary } from '@/components/groups/trip-settled-summary';
 import { requireUser } from '@/lib/supabase/server';
 import { getGroupDetail } from '@/lib/queries/social';
 import { getAppSettings } from '@/lib/queries/core';
@@ -40,6 +41,26 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   const plan = netTotal === 0 ? minimizeTransfers(members.map((member) => ({ userId: member.user_id, amount: toMinor(member.net) }))) : [];
   const myPayments = plan.filter((transfer) => transfer.from === user.id || transfer.to === user.id);
 
+  // Group is fully settled when all members have 0 net balance and there are real group expenses
+  const isFullySettled =
+    members.length > 0 &&
+    expenses.length > 0 &&
+    members.every((member) => toMinor(member.net) === 0);
+
+  const totalGroupSpendMinor = expenses
+    .filter((e) => e.status !== 'CANCELLED')
+    .reduce((sum, e) => sum + toMinor(e.amount), 0);
+
+  // Reuse existing settlement-minimization output on historical unbalances to show the settled transfer list
+  const tripTransfers = isFullySettled
+    ? minimizeTransfers(
+        members.map((member) => ({
+          userId: member.user_id,
+          amount: toMinor(member.paid) - toMinor(member.share),
+        }))
+      )
+    : [];
+
   const nameOf = (userId: string) =>
     members.find((member) => member.user_id === userId)?.profile.full_name.split(' ')[0] ?? 'Someone';
 
@@ -48,6 +69,15 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
       <Link href="/groups" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" aria-hidden /> All groups
       </Link>
+
+      {isFullySettled && (
+        <TripSettledSummary
+          groupName={group.name}
+          totalGroupSpendMinor={totalGroupSpendMinor}
+          members={members}
+          transfers={tripTransfers}
+        />
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

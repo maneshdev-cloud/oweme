@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { createClient, requireUser } from '@/lib/supabase/server';
 import { friendRequestSchema, friendResponseSchema } from '@/lib/validation';
 import { fail, okVoid, type ActionResult } from '@/lib/actions/types';
+import { sendPushNotificationToUser } from '@/lib/push/server';
+import { assertMaintenanceAllowsWrites } from '@/lib/actions/maintenance';
 
 /**
  * Friend requests. Duplicate requests (in either direction) are impossible:
@@ -14,6 +16,9 @@ const DUPLICATE_KEY = '23505';
 
 export async function sendFriendRequest(input: unknown): Promise<ActionResult> {
   const user = await requireUser();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
+  if (maintenanceBlock) return maintenanceBlock;
+
   const parsed = friendRequestSchema.safeParse(input);
   if (!parsed.success) return fail('That is not a valid person.');
 
@@ -47,12 +52,24 @@ export async function sendFriendRequest(input: unknown): Promise<ActionResult> {
     return fail(error.message);
   }
 
+  const actorName = user.user_metadata?.full_name?.split(' ')[0] || 'Someone';
+  void sendPushNotificationToUser(addresseeId, {
+    type: 'friend_request',
+    title: 'New friend request',
+    body: `${actorName} sent you a friend request on OWEME.`,
+    url: '/friends',
+    tag: `friend-request-${user.id}`,
+  }).catch(() => undefined);
+
   revalidatePath('/friends');
   return okVoid();
 }
 
 export async function respondToFriendRequest(input: unknown): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
+  if (maintenanceBlock) return maintenanceBlock;
+
   const parsed = friendResponseSchema.safeParse(input);
   if (!parsed.success) return fail('That request is no longer available.');
 
@@ -60,9 +77,31 @@ export async function respondToFriendRequest(input: unknown): Promise<ActionResu
   const status = response === 'accept' ? 'accepted' : response === 'decline' ? 'declined' : 'cancelled';
 
   const supabase = await createClient();
+
+  let requesterId: string | null = null;
+  if (response === 'accept') {
+    const { data: current } = await supabase
+      .from('friendships')
+      .select('requester_id')
+      .eq('id', friendshipId)
+      .maybeSingle();
+    requesterId = current?.requester_id ?? null;
+  }
+
   const { error } = await supabase.from('friendships').update({ status }).eq('id', friendshipId);
 
   if (error) return fail(error.message);
+
+  if (response === 'accept' && requesterId) {
+    const actorName = user.user_metadata?.full_name?.split(' ')[0] || 'Friend';
+    void sendPushNotificationToUser(requesterId, {
+      type: 'friend_accepted',
+      title: 'Friend request accepted',
+      body: `${actorName} accepted your friend request on OWEME.`,
+      url: '/friends',
+      tag: `friend-accepted-${user.id}`,
+    }).catch(() => undefined);
+  }
 
   revalidatePath('/friends');
   revalidatePath('/home');
@@ -71,6 +110,9 @@ export async function respondToFriendRequest(input: unknown): Promise<ActionResu
 
 export async function removeFriend(input: unknown): Promise<ActionResult> {
   await requireUser();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
+  if (maintenanceBlock) return maintenanceBlock;
+
   const parsed = friendResponseSchema.pick({ friendshipId: true }).safeParse(input);
   if (!parsed.success) return fail('That friendship is no longer available.');
 
@@ -90,6 +132,9 @@ export async function removeFriend(input: unknown): Promise<ActionResult> {
 /** Respond to an incoming request directly from its notification. */
 export async function respondToFriendRequestFromNotification(input: unknown): Promise<ActionResult> {
   const user = await requireUser();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
+  if (maintenanceBlock) return maintenanceBlock;
+
   const parsed = friendResponseSchema.pick({ response: true }).and(friendRequestSchema).safeParse(input);
   if (!parsed.success) return fail('That friend request is no longer available.');
 

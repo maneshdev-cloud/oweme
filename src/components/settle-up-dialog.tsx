@@ -24,18 +24,24 @@ export function SettleUpDialog({
   person,
   balanceMinor,
   groupId,
+  initialDirection,
+  redirect = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   person: Person;
   balanceMinor: number;
   groupId?: string;
+  initialDirection?: 'i_paid' | 'they_paid';
+  redirect?: boolean;
   trigger?: React.ReactNode;
 }) {
   const router = useRouter();
   const suggested = Math.abs(balanceMinor);
   const [amount, setAmount] = useState(suggested > 0 ? (suggested / 100).toFixed(2).replace(/\.00$/, '') : '');
-  const [direction, setDirection] = useState<'i_paid' | 'they_paid'>(balanceMinor < 0 ? 'i_paid' : 'they_paid');
+  const [direction, setDirection] = useState<'i_paid' | 'they_paid'>(
+    initialDirection ?? (balanceMinor < 0 ? 'i_paid' : 'they_paid'),
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const requestId = useRef(crypto.randomUUID());
@@ -82,7 +88,9 @@ export function SettleUpDialog({
           : `Payment recorded · To receive ${formatINR(minor)}`,
       );
       onOpenChange(false);
-      router.push(`/settlements/${result.data.id}`);
+      if (redirect) {
+        router.push(`/settlements/${result.data.id}`);
+      }
       router.refresh();
     });
   }

@@ -138,46 +138,88 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-/* Progressive enhancement only.
- *
- * V1 has no server-side push sender (that needs VAPID keys and a delivery
- * pipeline — see README → "Browser push"). In-app notifications are the
- * first-class channel and never depend on this. The handler below is what a
- * later version's sender would talk to, and `showNotification` from the profile
- * screen already proves the display path works today. */
+/* -----------------------------------------------------------------------------
+ * Web Push & System Notification Handlers
+ * -----------------------------------------------------------------------------
+ */
 self.addEventListener('push', (event) => {
-  let payload = { title: 'OweMe', body: 'Something happened in OweMe.', url: '/notifications' };
+  let payload = {
+    title: 'OWEME',
+    body: 'You have a new update in OWEME.',
+    url: '/notifications',
+    tag: 'oweme-alert',
+  };
+
   try {
-    if (event.data) payload = { ...payload, ...event.data.json() };
+    if (event.data) {
+      const parsed = event.data.json();
+      payload = {
+        ...payload,
+        ...parsed,
+        url: parsed.url || (parsed.settlement_id ? `/expenses/${parsed.settlement_id}` : '/notifications'),
+      };
+    }
   } catch {
-    /* keep the defaults rather than dropping the alert */
+    if (event.data) {
+      payload.body = event.data.text();
+    }
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/favicon-32.png',
-      data: { url: payload.url },
-      tag: payload.tag || 'oweme',
-    }),
+    (async () => {
+      // Point 7: Foreground notification deduplication.
+      // If user is actively focused on an open OWEME window, suppress duplicate system alerts
+      // (Supabase Realtime already handles in-app chimes, toasts, and UI revalidation).
+      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const isFocused = allClients.some((client) => client.focused);
+
+      if (isFocused) {
+        // App is open and in foreground right now; let in-app Realtime handle the notification.
+        return;
+      }
+
+      const options = {
+        body: payload.body,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: {
+          url: payload.url,
+          type: payload.type,
+          tag: payload.tag,
+        },
+        tag: payload.tag || 'oweme',
+        renotify: true,
+        vibrate: [100, 50, 100],
+      };
+
+      return self.registration.showNotification(payload.title, options);
+    })(),
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/notifications';
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/notifications';
+
   event.waitUntil(
     (async () => {
       const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // Focus an existing window rather than piling up new tabs.
+      const origin = self.location.origin;
+
+      // Focus an existing window if one is open
       for (const client of clients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(target);
+        if (client.url.startsWith(origin) && 'focus' in client) {
+          if ('navigate' in client) {
+            await client.navigate(targetUrl);
+          }
           return client.focus();
         }
       }
-      return self.clients.openWindow(target);
+
+      // No open window found: open a fresh window directly to target URL
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
     })(),
   );
 });

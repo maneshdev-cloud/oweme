@@ -14,6 +14,7 @@ export function okVoid(): ActionResult<undefined> {
   return { ok: true, data: undefined };
 }
 
-export function fail(error: string, fieldErrors?: Record<string, string[]>): ActionResult<never> {
+export function fail(error: string, fieldErrors?: Record<string, string[]>): ActionFailure {
   return { ok: false, error, fieldErrors };
 }
+

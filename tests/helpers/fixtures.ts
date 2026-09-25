@@ -430,10 +430,22 @@ export const fixtureRpcs: FakeDb['rpcs'] = {
     for (const row of db.tables.expenses ?? []) {
       if (row.status !== 'PENDING' && row.status !== 'PAYMENT_MARKED' && row.status !== 'DISPUTED') continue;
       const minor = Math.round(Number(row.amount) * 100);
-      if (row.debtor_id === viewer) owe += minor;
+      if (row.debtor_id === viewer) {
+        if (row.status !== 'PAYMENT_MARKED') owe += minor;
+      }
       if (row.payer_id === viewer) owed += minor;
     }
-    return { data: [{ currency: 'INR', you_are_owed: owed, you_owe: owe, net: owed - owe }], error: null };
+    for (const row of db.tables.settlements ?? []) {
+      if (!row.group_id) {
+        const minor = Math.round(Number(row.amount) * 100);
+        if (row.payer_id === viewer && (row.status === 'CONFIRMED' || row.status === 'PENDING')) {
+          owe = Math.max(0, owe - minor);
+        } else if (row.receiver_id === viewer && row.status === 'CONFIRMED') {
+          owed = Math.max(0, owed - minor);
+        }
+      }
+    }
+    return { data: [{ currency: 'INR', you_are_owed: owed / 100, you_owe: owe / 100, net: (owed - owe) / 100 }], error: null };
   },
   my_balances: (_params, db) => {
     const viewer = db.user?.id;
@@ -443,7 +455,20 @@ export const fixtureRpcs: FakeDb['rpcs'] = {
       if (row.payer_id !== viewer && row.debtor_id !== viewer) continue;
       const other = row.payer_id === viewer ? (row.debtor_id as string) : (row.payer_id as string);
       const minor = Math.round(Number(row.amount) * 100);
-      byCounterparty.set(other, (byCounterparty.get(other) ?? 0) + (row.payer_id === viewer ? minor : -minor));
+      let delta = 0;
+      if (row.payer_id === viewer) delta = minor;
+      else if (row.status !== 'PAYMENT_MARKED') delta = -minor;
+      byCounterparty.set(other, (byCounterparty.get(other) ?? 0) + delta);
+    }
+    for (const row of db.tables.settlements ?? []) {
+      if (!row.group_id && (row.payer_id === viewer || row.receiver_id === viewer)) {
+        const other = row.payer_id === viewer ? (row.receiver_id as string) : (row.payer_id as string);
+        const minor = Math.round(Number(row.amount) * 100);
+        let delta = 0;
+        if (row.payer_id === viewer && (row.status === 'CONFIRMED' || row.status === 'PENDING')) delta = minor;
+        else if (row.receiver_id === viewer && row.status === 'CONFIRMED') delta = -minor;
+        byCounterparty.set(other, (byCounterparty.get(other) ?? 0) + delta);
+      }
     }
     return {
       data: [...byCounterparty.entries()]
@@ -451,5 +476,44 @@ export const fixtureRpcs: FakeDb['rpcs'] = {
         .map(([counterparty_id, balance]) => ({ counterparty_id, currency: 'INR', balance: balance / 100 })),
       error: null,
     };
+  },
+  my_group_summaries: (_params, db) => {
+    const viewer = db.user?.id;
+    const members = (db.tables.group_members ?? []).filter((m) => m.user_id === viewer);
+    const groups = (db.tables.groups ?? []).filter((g) => members.some((m) => m.group_id === g.id));
+    const rows = groups.map((g) => {
+      const live = (db.tables.group_expenses ?? []).filter((ge) => ge.group_id === g.id && ge.status === 'PENDING');
+      let paid = 0;
+      for (const e of live) {
+        if (e.paid_by === viewer) paid += Number(e.amount);
+      }
+      let share = 0;
+      for (const s of db.tables.group_expense_shares ?? []) {
+        if (s.user_id === viewer && live.some((e) => e.id === s.group_expense_id)) {
+          share += Number(s.share_amount);
+        }
+      }
+      let settledOut = 0;
+      let settledIn = 0;
+      for (const s of db.tables.settlements ?? []) {
+        if (s.group_id === g.id && s.status === 'CONFIRMED') {
+          if (s.payer_id === viewer) settledOut += Number(s.amount);
+          if (s.receiver_id === viewer) settledIn += Number(s.amount);
+        }
+      }
+      const my_net = paid - share + settledOut - settledIn;
+      return {
+        group_id: g.id,
+        name: g.name,
+        description: g.description,
+        currency: (g.currency as string) ?? 'INR',
+        member_count: (db.tables.group_members ?? []).filter((m) => m.group_id === g.id).length,
+        my_net,
+        role: members.find((m) => m.group_id === g.id)?.role ?? 'member',
+        created_at: g.created_at,
+        last_activity_at: g.created_at,
+      };
+    });
+    return { data: rows, error: null };
   },
 };

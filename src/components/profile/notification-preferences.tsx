@@ -9,6 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { updateNotificationPreferences } from '@/lib/actions/notifications';
 import { testDeviceNotification } from '@/lib/notifications';
+import {
+  subscribeDeviceToPush,
+  unsubscribeDeviceFromPush,
+  isPushSupported,
+  getExistingPushSubscription,
+} from '@/lib/push/client';
 
 /**
  * The app works completely without browser push — notifications are rows in the
@@ -25,38 +31,45 @@ export function NotificationPreferences({
   const router = useRouter();
   const [push, setPush] = useState(browserPushEnabled);
   const [email, setEmail] = useState(emailEnabled);
-  // Decided in the browser: during server rendering there is no Notification API.
   const [pushSupported, setPushSupported] = useState(false);
   const [permission, setPermission] = useState<string>('default');
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    const supported = typeof window !== 'undefined' && 'Notification' in window;
+    const supported = isPushSupported();
     setPushSupported(supported);
-    setPermission(supported ? Notification.permission : 'unsupported');
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermission(Notification.permission);
+      void getExistingPushSubscription().then((sub) => {
+        if (sub) setPush(true);
+      });
+    } else {
+      setPermission('unsupported');
+    }
   }, []);
 
   async function enablePush(next: boolean) {
     if (!next) {
       setPush(false);
+      await unsubscribeDeviceFromPush();
       save({ browserPushEnabled: false, emailEnabled: email });
+      toast.info('Device push alerts turned off.');
       return;
     }
 
-    try {
-      const result = await Notification.requestPermission();
-      setPermission(result);
-      if (result !== 'granted') {
-        toast.error('Your browser said no. In-app alerts still work — you won’t miss anything.');
-        return;
+    const result = await subscribeDeviceToPush();
+    if (!result.success) {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setPermission(Notification.permission);
       }
-    } catch {
-      toast.error('This browser wouldn’t ask. In-app alerts still work.');
+      toast.error(result.error || 'Failed to enable notifications.');
       return;
     }
 
     setPush(true);
+    setPermission('granted');
     save({ browserPushEnabled: true, emailEnabled: email });
+    toast.success('Notifications enabled ✓');
   }
 
   function save(input: { browserPushEnabled: boolean; emailEnabled: boolean }) {

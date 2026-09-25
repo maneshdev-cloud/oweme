@@ -209,7 +209,7 @@ export function NotificationItem({
           {isPaymentActionable && (
             <div className="flex w-full sm:w-auto items-center gap-2">
               <Button size="sm" variant="positive" className="flex-1 sm:flex-initial" onClick={() => respondPayment('yes')} disabled={pending}>
-                <Check className="h-3.5 w-3.5" aria-hidden /> Yes
+                <Check className="h-3.5 w-3.5" aria-hidden /> Received
               </Button>
               <Button
                 size="sm"
@@ -218,7 +218,7 @@ export function NotificationItem({
                 onClick={() => respondPayment('no')}
                 disabled={pending}
               >
-                <X className="h-3.5 w-3.5" aria-hidden /> No
+                <X className="h-3.5 w-3.5" aria-hidden /> Didn&apos;t Receive
               </Button>
             </div>
           )}

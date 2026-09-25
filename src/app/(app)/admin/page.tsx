@@ -1,16 +1,17 @@
-import Link from 'next/link';
-import { Activity, BarChart3, Database, HeartPulse, ScrollText, Users } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { Activity, AlertTriangle, Database, HeartPulse, ScrollText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { requireUser, createClient } from '@/lib/supabase/server';
 import { getAppSettings, isAdmin } from '@/lib/queries/core';
-import { ClaimAdminCard } from '@/components/admin/claim-admin-card';
+import { getAdminUpgradeData } from '@/lib/queries/admin';
 import { AdminSettingsPanel } from '@/components/admin/admin-settings-panel';
-import { AdminRolePanel } from '@/components/admin/admin-role-panel';
+import { AdminManagementPanel, type AuthorizedAdminItem } from '@/components/admin/admin-management-panel';
+import { AdminUsageChart } from '@/components/admin/admin-usage-chart';
+import { AdminAdoptionPanel } from '@/components/admin/admin-adoption-panel';
 import { formatINR, toMinor } from '@/lib/money';
 import { timeAgo } from '@/lib/utils';
-import type { Person } from '@/lib/types';
 
 export const metadata = { title: 'Admin' };
 
@@ -45,20 +46,23 @@ type AdminStats = {
 export default async function AdminPage() {
   const user = await requireUser();
 
+  // Strict server-side access enforcement: bounce unauthorized visitors immediately
   if (!(await isAdmin())) {
-    return (
-      <div className="space-y-5">
-        <h2 className="text-xl font-semibold tracking-tight">Admin</h2>
-        <ClaimAdminCard />
-      </div>
-    );
+    redirect('/home');
   }
 
   const supabase = await createClient();
-  const [statsResult, settings, adminsResult, logsResult, auditResult] = await Promise.all([
+  const { createServiceClient } = await import('@/lib/supabase/server');
+  const service = createServiceClient();
+  const clientToUse = service ?? supabase;
+
+  const [statsResult, settings, authorizedAdminsResult, logsResult, auditResult, upgradeData] = await Promise.all([
     supabase.rpc('admin_stats'),
     getAppSettings(),
-    supabase.from('admin_users').select('user_id, created_at').order('created_at'),
+    clientToUse
+      .from('admin_authorized_emails')
+      .select('id, email, role, created_at')
+      .order('created_at', { ascending: true }),
     supabase
       .from('server_logs')
       .select('id, level, event, message, created_at')
@@ -69,15 +73,32 @@ export default async function AdminPage() {
       .select('id, action, payload, created_at')
       .order('created_at', { ascending: false })
       .limit(10),
+    getAdminUpgradeData().catch(() => ({
+      usageOverTime: [],
+      adoption: {
+        groups: { total: 0, withThreePlusMembers: 0, withOneOrTwoMembers: 0, empty: 0 },
+        settlements: { total: 0, confirmed: 0, disputed: 0, pendingOrUnconfirmed: 0 },
+        usersUsedSettleUp: 0,
+        activeUsers7d: 0,
+        totalUsers: 0,
+      },
+    })),
   ]);
 
+  let authorizedAdmins = (authorizedAdminsResult.data ?? []) as AuthorizedAdminItem[];
+  if (!authorizedAdmins.some((a) => a.email.toLowerCase() === 'maneshjadhavofficial@gmail.com')) {
+    authorizedAdmins = [
+      {
+        id: 'owner-primary',
+        email: 'maneshjadhavofficial@gmail.com',
+        role: 'owner',
+        created_at: new Date().toISOString(),
+      },
+      ...authorizedAdmins,
+    ];
+  }
+
   const stats = (statsResult.data ?? null) as AdminStats | null;
-  const adminIds = ((adminsResult.data ?? []) as Array<{ user_id: string }>).map((row) => row.user_id);
-  const people = adminIds.length
-    ? (((
-        await supabase.from('public_profiles').select('id, full_name, username, avatar_url').in('id', adminIds)
-      ).data ?? []) as Person[])
-    : [];
   const logs = (logsResult.data ?? []) as Array<{
     id: number;
     level: string;
@@ -92,18 +113,20 @@ export default async function AdminPage() {
     created_at: string;
   }>;
 
-  const tiles = stats
-    ? [
-        { label: 'People', value: stats.users.total, hint: `${stats.users.new_7d} new this week` },
-        { label: 'Active (7d)', value: stats.users.active_7d, hint: 'wrote something' },
-        { label: 'Expenses', value: stats.expenses.total, hint: `${stats.expenses.last_7d} this week` },
-        { label: 'Open', value: stats.expenses.open, hint: `${formatINR(toMinor(stats.expenses.open_value))} face value` },
-        { label: 'Disputed', value: stats.expenses.disputed, hint: 'nothing auto-resolved' },
-        { label: 'Groups', value: stats.groups.total, hint: `${stats.groups.active_30d} active this month` },
-        { label: 'Notifications', value: stats.notifications.total, hint: `${stats.notifications.unread} unread` },
-        { label: 'Archived', value: stats.retention.archived_records, hint: `${stats.retention.pending_purge} past purge date` },
-      ]
-    : [];
+  const totalUsersCount = stats?.users?.total ?? upgradeData.adoption.totalUsers ?? 0;
+  const activeUsersCount = stats?.users?.active_7d ?? upgradeData.adoption.activeUsers7d ?? 0;
+  const new7dUsersCount = stats?.users?.new_7d ?? 0;
+
+  const tiles = [
+    { label: 'Total Users', value: totalUsersCount, hint: `${new7dUsersCount} new this week` },
+    { label: 'Active (7d)', value: activeUsersCount, hint: 'engaged recently' },
+    { label: 'Expenses', value: stats?.expenses?.total ?? 0, hint: `${stats?.expenses?.last_7d ?? 0} this week` },
+    { label: 'Open', value: stats?.expenses?.open ?? 0, hint: `${formatINR(toMinor(stats?.expenses?.open_value ?? 0))} face value` },
+    { label: 'Disputed', value: stats?.expenses?.disputed ?? 0, hint: 'nothing auto-resolved' },
+    { label: 'Groups', value: stats?.groups?.total ?? upgradeData.adoption.groups.total, hint: `${stats?.groups?.active_30d ?? 0} active this month` },
+    { label: 'Notifications', value: stats?.notifications?.total ?? 0, hint: `${stats?.notifications?.unread ?? 0} unread` },
+    { label: 'Archived', value: stats?.retention?.archived_records ?? 0, hint: `${stats?.retention?.pending_purge ?? 0} past purge date` },
+  ];
 
   return (
     <div className="space-y-5">
@@ -114,12 +137,20 @@ export default async function AdminPage() {
             Operational view only. There is no way to read somebody’s expenses from here — that is by design.
           </p>
         </div>
-        <Badge variant={stats && stats.health.errors_24h === 0 ? 'positive' : 'negative'}>
+        <Badge variant={stats && stats.health?.errors_24h === 0 ? 'positive' : 'negative'}>
           <HeartPulse className="mr-1 h-3 w-3" aria-hidden />
-          {stats ? `${stats.health.errors_24h} errors / 24h` : 'stats unavailable'}
+          {stats ? `${stats.health?.errors_24h ?? 0} errors / 24h` : 'health check quiet'}
         </Badge>
       </div>
 
+      {statsResult.error && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>Notice: RPC statistics had degraded database response. Core operational panels remain active.</span>
+        </div>
+      )}
+
+      {/* High-level metrics */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((tile) => (
           <Card key={tile.label}>
@@ -132,6 +163,12 @@ export default async function AdminPage() {
         ))}
       </div>
 
+      {/* Upgrades: Usage over time chart */}
+      <AdminUsageChart data={upgradeData.usageOverTime} />
+
+      {/* Upgrades: Feature adoption signals */}
+      <AdminAdoptionPanel adoption={upgradeData.adoption} />
+
       <AdminSettingsPanel
         settings={settings}
         retention={{
@@ -141,7 +178,7 @@ export default async function AdminPage() {
         }}
       />
 
-      <AdminRolePanel admins={people} currentUserId={user.id} />
+      <AdminManagementPanel admins={authorizedAdmins} currentUserEmail={user.email} />
 
       <Card>
         <CardHeader className="pb-3">
@@ -184,16 +221,19 @@ export default async function AdminPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>
-              Database total: <span className="tabular font-medium">{bytes(stats?.storage.database_bytes)}</span>
+              Database total: <span className="tabular font-medium">{bytes(stats?.storage?.database_bytes)}</span>
             </p>
             <Separator />
             <ul className="space-y-1">
-              {(stats?.storage.largest_tables ?? []).map((table) => (
+              {(stats?.storage?.largest_tables ?? []).map((table) => (
                 <li key={table.table} className="flex justify-between">
                   <span className="text-muted-foreground">{table.table}</span>
                   <span className="tabular">{bytes(table.bytes)}</span>
                 </li>
               ))}
+              {(!stats?.storage?.largest_tables || stats.storage.largest_tables.length === 0) && (
+                <li className="text-xs text-muted-foreground">Table metrics unavailable</li>
+              )}
             </ul>
           </CardContent>
         </Card>
@@ -221,33 +261,6 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="bg-secondary/60">
-        <CardContent className="space-y-2 p-4 text-sm text-muted-foreground">
-          <p className="flex items-center gap-2 font-medium text-foreground">
-            <Users className="h-4 w-4" aria-hidden /> How to grant admin outside this screen
-          </p>
-          <pre className="overflow-x-auto rounded-lg bg-background p-3 text-xs">
-{`insert into public.admin_users (user_id, note)
-select id, 'trusted teammate'
-from public.profiles
-where username = 'their_username';`}
-          </pre>
-          <p>
-            The claim button above only works while no admin exists at all. Everything after that is this one-liner —
-            deliberately, so a compromised account cannot promote itself from the UI.
-          </p>
-        </CardContent>
-      </Card>
-
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <BarChart3 className="h-3.5 w-3.5" aria-hidden />
-        Aggregates only: counts and rupee totals across everyone, never a single person’s ledger. Health probe lives at{' '}
-        <Link href="/api/health" className="underline underline-offset-4">
-          /api/health
-        </Link>
-        .
-      </p>
     </div>
   );
 }

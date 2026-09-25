@@ -1,48 +1,106 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { useRealtimeStatus } from '@/components/providers/realtime-provider';
 
 /**
- * Two different things, deliberately kept apart:
- *  - offline: the device has no connection at all, so adding an expense is
- *    refused up front rather than queued and silently failed.
- *  - reconnecting: we are online but the realtime socket dropped, so updates
- *    may be a moment behind.
+ * Offline & connection banner:
+ *  - appears when navigator.onLine is false OR when a fetch/Supabase call fails with a network-level error specifically.
+ *  - auto-dismisses when connectivity returns.
+ *  - never fires for application errors (RLS errors, validation errors, 4xx/5xx responses).
+ *  - persistent banner on mobile and desktop.
  */
 export function ConnectionBanner() {
-  const [online, setOnline] = useState(true);
-  const { state } = useRealtimeStatus();
+  const [offline, setOffline] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const realtime = useRealtimeStatus();
 
-  useEffect(() => {
-    setOnline(navigator.onLine);
-    const goOnline = () => setOnline(true);
-    const goOffline = () => setOnline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
+  const checkConnectivity = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setOffline(true);
+      return;
+    }
+    setChecking(true);
+    try {
+      const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+      if (res) {
+        setOffline(false);
+      }
+    } catch (err: unknown) {
+      if (
+        err instanceof TypeError ||
+        (err instanceof Error &&
+          (err.name === 'TypeError' ||
+            err.message.toLowerCase().includes('fetch') ||
+            err.message.toLowerCase().includes('network')))
+      ) {
+        setOffline(true);
+      }
+    } finally {
+      setChecking(false);
+    }
   }, []);
 
-  if (!online) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!navigator.onLine) {
+      setOffline(true);
+    }
+
+    const handleOnline = () => {
+      setOffline(false);
+      void checkConnectivity();
+    };
+
+    const handleOffline = () => {
+      setOffline(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Periodic check every 30 seconds when window is active
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void checkConnectivity();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, [checkConnectivity]);
+
+  if (offline) {
     return (
       <div
         role="status"
-        className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-800 dark:text-amber-300"
+        aria-live="assertive"
+        className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-600/30 bg-amber-500/15 px-4 py-2.5 text-sm text-amber-900 backdrop-blur-md dark:bg-amber-950/90 dark:text-amber-200"
       >
-        <CloudOff className="h-4 w-4 shrink-0" aria-hidden />
-        <p>
-          <strong className="font-semibold">You&apos;re offline.</strong> You can look around, but adding or
-          confirming expenses needs a connection — nothing is queued up in the background.
-        </p>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <CloudOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <p className="text-xs sm:text-sm">
+            <strong className="font-semibold">You&apos;re offline</strong> — some things may not load until you&apos;re back online.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void checkConnectivity()}
+          disabled={checking}
+          className="shrink-0 rounded-md border border-amber-600/30 bg-amber-500/20 px-2.5 py-1 text-xs font-medium hover:bg-amber-500/30 active:scale-95 transition-all disabled:opacity-50"
+        >
+          {checking ? 'Checking…' : 'Retry'}
+        </button>
       </div>
     );
   }
 
-  if (state === 'reconnecting') {
+  if (realtime?.state === 'reconnecting') {
     return (
       <div
         role="status"

@@ -157,11 +157,32 @@ export type AppSettings = {
   archive_notice_days: number;
 };
 
+export type DashboardWaitingItem = {
+  kind: 'expense' | 'settlement';
+  id: string;
+  amount: number;
+  currency: string;
+  description: string;
+  status: ExpenseStatus;
+  counterparty: Person;
+  created_at: string;
+};
+
 export type DashboardData = {
-  totals: { currency: string; you_are_owed: number; you_owe: number; net: number };
+  totals: {
+    currency: string;
+    you_are_owed: number;
+    you_owe: number;
+    net: number;
+    friends_owed: number;
+    friends_owe: number;
+    groups_owed: number;
+    groups_owe: number;
+  };
   balances: Array<{ counterparty: Person; currency: string; balance: number }>;
   openExpenses: Array<Expense & { counterparty: Person; youArePayer: boolean }>;
-  waitingOnYou: Array<Expense & { counterparty: Person; youArePayer: boolean }>;
+  waitingOnYou: DashboardWaitingItem[];
+  needsResponseCount: number;
   recentActivity: Array<Expense & { counterparty: Person; youArePayer: boolean }>;
   suggestions: SearchResult[];
   unreadNotifications: number;

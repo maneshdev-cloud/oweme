@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient, getSessionUser } from '@/lib/supabase/server';
 import { getHistory, toCsv } from '@/lib/queries/history';
+import { getAppSettings, isAdmin } from '@/lib/queries/core';
 import { log } from '@/lib/logger';
 import type { HistoryFilters } from '@/lib/types';
 
@@ -21,6 +22,14 @@ export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: 'Sign in first.' }, { status: 401 });
+  }
+
+  const settings = await getAppSettings();
+  if (settings.maintenance_mode && !(await isAdmin())) {
+    return NextResponse.json(
+      { error: 'OWEME is currently under maintenance. Please try again after some time.' },
+      { status: 503 },
+    );
   }
 
   const url = new URL(request.url);

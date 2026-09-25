@@ -108,3 +108,6 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     </div>
   );
 }
+
+export default NotificationList;
+

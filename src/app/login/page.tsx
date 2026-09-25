@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { ExternalLink, HandCoins, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { ExternalLink, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { Brand } from '@/components/brand';
 import { SignInButton } from '@/app/login/sign-in-button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,7 +25,7 @@ export default function LoginPage() {
             <span className="text-muted-foreground">OweMe tracks what to give and what to receive.</span>
           </h1>
           <p className="text-sm text-muted-foreground">
-            No money moves through the app — you settle up in cash or UPI, then confirm it here.
+            Track your money clearly — see where it comes from, where it goes, and who you’re settling with.
           </p>
         </div>
       </div>
@@ -53,9 +53,7 @@ export default function LoginPage() {
       </p>
 
       <p className="text-center text-xs text-muted-foreground">
-        <HandCoins className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-        Google sign-in only for now. Email and password can be switched on later without changing anything you’ve
-        already saved.
+        Manual authentication will be available soon.
       </p>
 
       <div className="pt-2 text-center text-xs">

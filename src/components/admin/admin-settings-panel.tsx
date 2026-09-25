@@ -63,10 +63,15 @@ export function AdminSettingsPanel({
       const result = await updateAdminSetting({ key, value });
       setSavingKey(null);
       if (!result.ok) {
-        toast.error(result.error);
+        toast.error(result.error || `Unable to update ${key}. Check server configuration.`);
         return;
       }
-      toast.success('Saved.');
+      if (key === 'maintenance_mode') {
+        toast.success(value ? 'Maintenance mode enabled.' : 'Maintenance mode disabled.');
+      } else {
+        const toggle = TOGGLES.find((t) => t.key === key);
+        toast.success(`${toggle?.label ?? 'Setting'} updated.`);
+      }
       router.refresh();
     });
   }

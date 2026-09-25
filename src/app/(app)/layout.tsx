@@ -13,8 +13,8 @@ import { requireUser } from '@/lib/supabase/server';
 import { getAppSettings, getUnreadNotificationCount, isAdmin } from '@/lib/queries/core';
 import { getFriends } from '@/lib/queries/social';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import { DashboardSettleUpButton } from '@/components/dashboard-settle-up-button';
+import { DownloadAppButton } from '@/components/download-app-button';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -39,19 +39,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ConnectionBanner />
         <AnnouncementBanner settings={settings} />
 
-        <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 pb-36 pt-4 lg:pb-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 pb-24 safe-bottom pt-4 lg:pb-10">
           <aside className="hidden w-60 shrink-0 flex-col gap-6 lg:flex">
             <Link href="/home" className="px-3 py-2">
               <Brand />
             </Link>
             <SidebarNav unreadCount={unread} />
-            <div className="space-y-3 px-3">
+            <div className="space-y-2 px-3">
               <AddExpenseButton
                 friends={friends}
                 variant="inline"
                 className="w-full"
                 disabled={creationDisabled}
                 label="Add expense"
+              />
+              <DashboardSettleUpButton
+                friends={friends}
+                variant="outline"
+                className="w-full"
+              />
+              <DownloadAppButton
+                variant="ghost"
+                className="w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                showLabel
               />
               {creationDisabled && (
                 <p className="text-xs text-muted-foreground">
@@ -67,6 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <Brand />
               </Link>
               <div className="flex items-center gap-1">
+                <DownloadAppButton variant="ghost" size="icon" />
                 <Button asChild variant="ghost" size="icon" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
                   <Link href="/notifications" className="relative">
                     <Bell className="h-5 w-5" />
@@ -84,6 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <h1 className="text-sm text-muted-foreground">Track → Notify → Confirm → Settle</h1>
               </div>
               <div className="flex items-center gap-2">
+                <DownloadAppButton variant="outline" size="sm" showLabel />
                 <Button asChild variant="outline" size="sm">
                   <Link href="/history">History &amp; export</Link>
                 </Button>

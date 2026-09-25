@@ -21,14 +21,37 @@ export default async function SettlementPage({ params }: { params: Promise<{ id:
   const amount = toMinor(settlement.amount);
   const youAreReceiver = settlement.receiver_id === user.id;
 
+  // Check if there is a related 1:1 expense between these two friends
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const { data: relatedExpense } = await supabase
+    .from('expenses')
+    .select('id, description')
+    .or(
+      `and(payer_id.eq.${settlement.payer_id},debtor_id.eq.${settlement.receiver_id}),and(payer_id.eq.${settlement.receiver_id},debtor_id.eq.${settlement.payer_id})`,
+    )
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <div className="space-y-5">
-      <Link
-        href={settlement.group_id ? `/groups/${settlement.group_id}` : '/home'}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Back
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href={settlement.group_id ? `/groups/${settlement.group_id}` : '/settle-up'}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden /> Back to settle up
+        </Link>
+        {relatedExpense && (
+          <Link
+            href={`/expenses/${relatedExpense.id}`}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            Go to expense: {relatedExpense.description} →
+          </Link>
+        )}
+      </div>
 
       <Card>
         <CardHeader className="pb-3">

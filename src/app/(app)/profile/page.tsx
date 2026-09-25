@@ -13,17 +13,23 @@ import { ReportIssueButton } from '@/components/report-issue-button';
 import { requireUser, createClient } from '@/lib/supabase/server';
 import { getMyProfile, getUnreadNotificationCount, isAdmin } from '@/lib/queries/core';
 import { formatDate } from '@/lib/utils';
+import { getPersonalAnalytics, getRecapCardData } from '@/lib/queries/analytics';
+import { PersonalAnalyticsView } from '@/components/analytics/personal-analytics';
+import { RecapCard } from '@/components/analytics/recap-card';
+import { DownloadAppButton } from '@/components/download-app-button';
 
 export const metadata = { title: 'Profile' };
 
 export default async function ProfilePage() {
   const user = await requireUser();
   const supabase = await createClient();
-  const [myProfile, admin, unread, preferences] = await Promise.all([
+  const [myProfile, admin, unread, preferences, analytics, recap] = await Promise.all([
     getMyProfile(),
     isAdmin(),
     getUnreadNotificationCount(),
     supabase.from('notification_preferences').select('*').eq('user_id', user.id).maybeSingle(),
+    getPersonalAnalytics(user.id),
+    getRecapCardData(user.id),
   ]);
 
   const prefs = (preferences.data ?? {}) as { browser_push_enabled?: boolean; email_enabled?: boolean };
@@ -38,7 +44,7 @@ export default async function ProfilePage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
         <PersonAvatar person={profile} className="h-14 w-14" />
         <div className="min-w-0">
@@ -49,6 +55,32 @@ export default async function ProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Personal Analytics (Private — visible only to user) */}
+      <section aria-labelledby="analytics-heading" className="space-y-3">
+        <div>
+          <h3 id="analytics-heading" className="text-base font-semibold tracking-tight">
+            Personal analytics
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Private to you. Counterparties are counted only — no balances or friend financials are ever exposed.
+          </p>
+        </div>
+        <PersonalAnalyticsView data={analytics} />
+      </section>
+
+      {/* Shareable Recap Card (Public-ready, zero friend info) */}
+      <section aria-labelledby="recap-heading" className="space-y-3">
+        <div>
+          <h3 id="recap-heading" className="text-base font-semibold tracking-tight">
+            Shareable recap
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Spotify Wrapped style image card. Strict privacy review: no friend names or balances appear.
+          </p>
+        </div>
+        {recap ? <RecapCard data={recap} /> : null}
+      </section>
 
       <Card>
         <CardHeader className="pb-3">
@@ -142,6 +174,23 @@ export default async function ProfilePage() {
             </Button>
           )}
           <SignOutButton />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Download className="h-4 w-4" aria-hidden /> App &amp; Offline Access
+          </CardTitle>
+          <CardDescription>
+            Install OweMe on your home screen or desktop for fast, one-tap access.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <DownloadAppButton variant="outline" showLabel />
+          <p className="text-xs text-muted-foreground">
+            Works on Android, iPhone (Safari), Windows, and Mac.
+          </p>
         </CardContent>
       </Card>
 

@@ -86,7 +86,7 @@ export default async function FriendsPage() {
                         </p>
                       </div>
                       {balance !== 0 && <Amount minor={balance} />}
-                      <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+                      <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto">
                         <AddExpenseButton
                           friends={friends}
                           variant="inline"

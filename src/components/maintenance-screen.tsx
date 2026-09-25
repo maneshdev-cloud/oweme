@@ -1,22 +1,29 @@
 import { Wrench } from 'lucide-react';
 import { Brand } from '@/components/brand';
+import { SignOutButton } from '@/components/profile/sign-out-button';
 
 /**
- * Shown to non-admins while maintenance mode is on. The database is still the
- * authority (writes are refused server-side); this is just the human-facing
- * version of that.
+ * Rendered server-side for non-admin users whenever maintenance mode is active.
+ * Bypassed entirely for verified administrators.
  */
 export function MaintenanceScreen() {
   return (
-    <main className="mx-auto flex min-h-svh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+    <main className="mx-auto flex min-h-svh max-w-md flex-col items-center justify-center gap-5 px-6 text-center">
       <Brand />
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-secondary">
-        <Wrench className="h-6 w-6" aria-hidden />
-      </span>
-      <h1 className="text-xl font-semibold">OweMe is getting a quick service</h1>
-      <p className="text-sm text-muted-foreground">
-        Nothing is lost — your balances are exactly as you left them. Try again in a few minutes.
-      </p>
+      <div className="grid h-16 w-16 place-items-center rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <Wrench className="h-8 w-8 animate-pulse" aria-hidden />
+      </div>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          OWEME is currently under maintenance.
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Please try again after some time.
+        </p>
+      </div>
+      <div className="pt-4">
+        <SignOutButton />
+      </div>
     </main>
   );
 }

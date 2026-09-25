@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { createClient } from '@/lib/supabase/server';
+import { cache } from 'react';
+import { createClient, getSessionUser } from '@/lib/supabase/server';
 import type {
   ExpenseEvent,
   Expense,
@@ -31,28 +32,64 @@ async function profilesFor(ids: string[]): Promise<Map<string, Person>> {
 // Friends
 // ---------------------------------------------------------------------------
 
-export async function getFriends(): Promise<FriendRow[]> {
+export const getFriends = cache(async function getFriends(): Promise<FriendRow[]> {
   const supabase = await createClient();
+  const user = await getSessionUser();
   const { data, error } = await supabase.rpc('my_friends');
   if (error || !data) return [];
-  const rows = data as FriendRow[];
+  let rows = data as FriendRow[];
   if (rows.length > 0 && rows[0].nickname === undefined) {
     const { data: nicks } = await supabase.from('friend_nicknames').select('friend_id, nickname');
     if (nicks && nicks.length > 0) {
       const map = new Map(nicks.map((n) => [n.friend_id, n.nickname as string]));
-      return rows.map((r) => ({ ...r, nickname: map.get(r.friend_id) ?? null }));
+      rows = rows.map((r) => ({ ...r, nickname: map.get(r.friend_id) ?? null }));
     }
   }
+
+  // Real-time synchronization: if user marked "I've Paid" on an expense or settlement to a friend,
+  // deduct it immediately from what the user owes that friend (balance < 0)
+  if (user && rows.length > 0) {
+    const [paidMarkedResult, pendingSettlementsResult] = await Promise.all([
+      supabase
+        .from('expenses')
+        .select('payer_id, amount')
+        .eq('debtor_id', user.id)
+        .eq('status', 'PAYMENT_MARKED'),
+      supabase
+        .from('settlements')
+        .select('receiver_id, amount')
+        .eq('payer_id', user.id)
+        .eq('status', 'PENDING'),
+    ]);
+
+    const paidByFriend = new Map<string, number>();
+    for (const exp of (paidMarkedResult.data ?? [])) {
+      paidByFriend.set(exp.payer_id, (paidByFriend.get(exp.payer_id) ?? 0) + Number(exp.amount));
+    }
+    for (const set of (pendingSettlementsResult.data ?? [])) {
+      paidByFriend.set(set.receiver_id, (paidByFriend.get(set.receiver_id) ?? 0) + Number(set.amount));
+    }
+
+    if (paidByFriend.size > 0) {
+      rows = rows.map((r) => {
+        const paid = paidByFriend.get(r.friend_id) ?? 0;
+        if (paid > 0 && r.balance < 0) {
+          const newBal = Math.min(0, r.balance + paid);
+          return { ...r, balance: Math.round(newBal * 100) / 100 };
+        }
+        return r;
+      });
+    }
+  }
+
   return rows;
-}
+});
 
 export async function getFriendRequests(): Promise<PendingRequest[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return [];
 
+  const supabase = await createClient();
   const { data } = await supabase
     .from('friendships')
     .select('id, requester_id, addressee_id, created_at')
@@ -114,14 +151,15 @@ export async function getExpenseDetail(expenseId: string): Promise<{
       .from('settlements')
       .select('*')
       .is('group_id', null)
-      .eq('status', 'CONFIRMED')
       .or(
         `and(payer_id.eq.${typed.debtor_id},receiver_id.eq.${typed.payer_id}),and(payer_id.eq.${typed.payer_id},receiver_id.eq.${typed.debtor_id})`,
       )
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(5),
   ]);
+
+  const allSettlements = (settlementResult?.data as Settlement[] | null) ?? [];
+  const settlement = allSettlements.find((s) => s.status !== 'CANCELLED') ?? allSettlements[0] ?? null;
 
   const events = ((eventsResult.data ?? []) as ExpenseEvent[]).map((event) => ({
     ...event,
@@ -133,7 +171,7 @@ export async function getExpenseDetail(expenseId: string): Promise<{
     payer: people.get(typed.payer_id) ?? UNKNOWN,
     debtor: people.get(typed.debtor_id) ?? UNKNOWN,
     events,
-    settlement: (settlementResult.data as Settlement | null) ?? null,
+    settlement,
   };
 }
 
@@ -168,11 +206,11 @@ export async function getSettlementDetail(settlementId: string): Promise<{
 // Groups
 // ---------------------------------------------------------------------------
 
-export async function getGroups(): Promise<GroupSummary[]> {
+export const getGroups = cache(async function getGroups(): Promise<GroupSummary[]> {
   const supabase = await createClient();
   const { data } = await supabase.rpc('my_group_summaries');
   return (data ?? []) as GroupSummary[];
-}
+});
 
 export async function getGroupDetail(groupId: string): Promise<{
   group: { id: string; name: string; description: string | null; currency: string; created_by: string };
@@ -298,3 +336,55 @@ export async function filterResolvableNotifications(notifications: Notification[
     return { ...notification, resolvable };
   });
 }
+
+export type SettlementItemView = {
+  settlement: Settlement;
+  payer: Person;
+  receiver: Person;
+  groupName: string | null;
+  isPayer: boolean;
+  isReceiver: boolean;
+};
+
+export const getMySettlements = cache(async function getMySettlements(): Promise<SettlementItemView[]> {
+  const user = await getSessionUser();
+  if (!user) return [];
+
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from('settlements')
+    .select('*')
+    .or(`payer_id.eq.${user.id},receiver_id.eq.${user.id}`)
+    .order('created_at', { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  const typedRows = rows as Settlement[];
+  const userIds = new Set<string>();
+  const groupIds = new Set<string>();
+
+  for (const r of typedRows) {
+    userIds.add(r.payer_id);
+    userIds.add(r.receiver_id);
+    if (r.group_id) groupIds.add(r.group_id);
+  }
+
+  const [people, groupData] = await Promise.all([
+    profilesFor(Array.from(userIds)),
+    groupIds.size > 0
+      ? supabase.from('groups').select('id, name').in('id', Array.from(groupIds))
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+
+  const groupNameMap = new Map((groupData.data ?? []).map((g) => [g.id, g.name]));
+
+  return typedRows.map((settlement) => ({
+    settlement,
+    payer: people.get(settlement.payer_id) ?? UNKNOWN,
+    receiver: people.get(settlement.receiver_id) ?? UNKNOWN,
+    groupName: settlement.group_id ? groupNameMap.get(settlement.group_id) ?? null : null,
+    isPayer: settlement.payer_id === user.id,
+    isReceiver: settlement.receiver_id === user.id,
+  }));
+});
+

@@ -72,7 +72,7 @@ export function RealtimeProvider({ userId, children }: { userId: string; childre
           }
         }
         router.refresh();
-      }, 60);
+      }, 350);
     };
 
     const channel = supabase.channel(`oweme:${userId}`);
