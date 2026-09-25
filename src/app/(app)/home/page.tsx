@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/empty-state';
 import { Amount } from '@/components/money';
 import { ExpenseCard } from '@/components/expense-card';
 import { PersonAvatar } from '@/components/person-avatar';
-import { StatusBadge } from '@/components/status-badge';
+
 import { formatINR, toMinor } from '@/lib/money';
 import { getUnsettledAgingText, isExpenseUnsettled } from '@/lib/nudge';
 import { getAppSettings, getDashboard, getMyProfile } from '@/lib/queries/core';

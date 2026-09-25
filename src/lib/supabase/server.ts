@@ -1,7 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { getSupabaseConfig } from '@/lib/supabase/config';
+
 
 /**
  * Supabase client for Server Components, Server Actions and Route Handlers.
@@ -46,8 +49,6 @@ export function createServiceClient() {
   if (!key) {
     try {
       // Dynamic fallback for local development if server process started before .env.local was updated
-      const fs = require('node:fs');
-      const path = require('node:path');
       const envPath = path.join(process.cwd(), '.env.local');
       if (fs.existsSync(envPath)) {
         const content = fs.readFileSync(envPath, 'utf8');
@@ -57,8 +58,9 @@ export function createServiceClient() {
         }
       }
     } catch {
-      // Non-blocking in environments without node fs
+      // Non-blocking in environments without filesystem access
     }
+
   }
 
   if (!key) return null;

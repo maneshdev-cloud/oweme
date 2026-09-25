@@ -20,7 +20,6 @@ export function SettleUpHub({
   friends,
   settlements,
   waitingOnYou = [],
-  userId,
 }: {
   friends: FriendRow[];
   settlements: SettlementItemView[];

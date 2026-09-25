@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 import { createClient, getSessionUser } from '@/lib/supabase/server';
-import type { AppSettings, DashboardData, DashboardWaitingItem, Expense, Person, Profile, SearchResult } from '@/lib/types';
+import type { AppSettings, DashboardData, DashboardWaitingItem, Expense, Person, Profile } from '@/lib/types';
 
 /**
  * Read helpers used by Server Components.
@@ -131,7 +131,6 @@ export const getDashboard = cache(async (): Promise<DashboardData> => {
     balancesResult,
     expensesResult,
     unreadCount,
-    friendshipsResult,
     groupsResult,
     pendingSettlementsResult,
     incomingRequestsResult,
@@ -148,12 +147,8 @@ export const getDashboard = cache(async (): Promise<DashboardData> => {
       .order('created_at', { ascending: false })
       .limit(40),
     getUnreadNotificationCount(),
-    supabase
-      .from('friendships')
-      .select('requester_id, addressee_id')
-      .eq('status', 'accepted')
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`),
     supabase.rpc('my_group_summaries'),
+
     supabase
       .from('settlements')
       .select('id, group_id, payer_id, receiver_id, amount, currency, status, created_at')
@@ -204,15 +199,9 @@ export const getDashboard = cache(async (): Promise<DashboardData> => {
     (s) => s.payer_id === user.id && s.status === 'PENDING',
   );
 
-  const acceptedFriendIds = new Set(
-    ((friendshipsResult.data ?? []) as Array<{ requester_id: string; addressee_id: string }>).map((friendship) =>
-      friendship.requester_id === user.id ? friendship.addressee_id : friendship.requester_id,
-    ),
-  );
-
   // Compute Friends subtotals
   const rawFriendsOwed = totalsRow ? Math.round(Number(totalsRow.you_are_owed) * 100) / 100 : 0;
-  let rawFriendsOwe = totalsRow ? Math.round(Number(totalsRow.you_owe) * 100) / 100 : 0;
+  const rawFriendsOwe = totalsRow ? Math.round(Number(totalsRow.you_owe) * 100) / 100 : 0;
 
   // When debtor marks payment ("I've Paid"), deduct that amount from debtor's pending "money to give"
   let markedPaidDeduction = 0;

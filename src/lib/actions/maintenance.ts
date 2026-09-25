@@ -8,7 +8,7 @@ import { fail, type ActionFailure } from '@/lib/actions/types';
  * Rejects non-admin financial & social writes when maintenance mode is active.
  * Bypassed completely for verified administrators.
  */
-export async function assertMaintenanceAllowsWrites<_T = never>(): Promise<ActionFailure | null> {
+export async function assertMaintenanceAllowsWrites(): Promise<ActionFailure | null> {
   const settings = await getAppSettings();
   if (settings.maintenance_mode) {
     const admin = await isAdmin();

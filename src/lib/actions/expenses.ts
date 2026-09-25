@@ -45,7 +45,7 @@ export async function createExpense(
   input: unknown,
 ): Promise<ActionResult<{ id: string; duplicate: boolean }>> {
   const user = await requireUser();
-  const maintenanceBlock = await assertMaintenanceAllowsWrites<{ id: string; duplicate: boolean }>();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
   if (maintenanceBlock) return maintenanceBlock;
 
   const parsed = createExpenseSchema.safeParse(input);
@@ -240,7 +240,7 @@ export async function createSettlement(
   input: unknown,
 ): Promise<ActionResult<{ id: string; duplicate: boolean }>> {
   const user = await requireUser();
-  const maintenanceBlock = await assertMaintenanceAllowsWrites<{ id: string; duplicate: boolean }>();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
   if (maintenanceBlock) return maintenanceBlock;
 
   const parsed = settlementSchema.safeParse(input);
@@ -417,7 +417,7 @@ export async function createGroupExpense(
   input: unknown,
 ): Promise<ActionResult<{ id: string; duplicate: boolean }>> {
   const user = await requireUser();
-  const maintenanceBlock = await assertMaintenanceAllowsWrites<{ id: string; duplicate: boolean }>();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
   if (maintenanceBlock) return maintenanceBlock;
 
   const parsed = createGroupExpenseSchema.safeParse(input);
