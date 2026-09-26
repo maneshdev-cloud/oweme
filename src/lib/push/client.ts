@@ -57,6 +57,24 @@ export async function getExistingPushSubscription(): Promise<PushSubscription | 
 /**
  * Subscribes the current device to Web Push and saves the subscription to Supabase.
  */
+async function getVapidPublicKey(): Promise<string | null> {
+  const fromEnv = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (fromEnv) return fromEnv;
+
+  try {
+    const res = await fetch('/api/push/vapid-public-key');
+    if (res.ok) {
+      const data = (await res.json()) as { publicKey?: string };
+      if (data?.publicKey) return data.publicKey;
+    }
+  } catch {
+    // Non-blocking fallback
+  }
+
+  // Pre-configured public key fallback
+  return 'BPOpgPYF76-7lewd64cjFS4EgilF25AuySicAiXS_Jz9KObOCGJw9zNjKLYWmyxKW6DqRVrQhqZw6j8JtndJ5ZA';
+}
+
 export async function subscribeDeviceToPush(): Promise<{
   success: boolean;
   error?: string;
@@ -75,7 +93,7 @@ export async function subscribeDeviceToPush(): Promise<{
     };
   }
 
-  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPublicKey = await getVapidPublicKey();
   if (!vapidPublicKey) {
     return {
       success: false,

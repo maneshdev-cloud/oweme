@@ -66,7 +66,7 @@ export function PersonalAnalyticsView({ data }: { data: PersonalAnalyticsData })
         <Card>
           <CardContent className="space-y-1 p-3.5">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-xs">Highest Single Expense</span>
+              <span className="text-xs">Highest Single Spending</span>
               <TrendingUp className="h-3.5 w-3.5" />
             </div>
             {data.highestExpense ? (

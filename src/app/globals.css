@@ -83,4 +83,21 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /*
+   * Global mobile bottom clearance for main scrollable content.
+   * Ensures the final card/content can always scroll completely ABOVE both the
+   * floating "+ Add expense" FAB (top edge at ~128px / 8rem) and the fixed BottomNav (~60px).
+   * Fully accounts for mobile safe-area insets (iOS home bar / PWA window insets).
+   * Resets gracefully on desktop/tablet (>= 1024px) where BottomNav and FAB are hidden.
+   */
+  .app-mobile-bottom-clearance {
+    padding-bottom: calc(12rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 1024px) {
+    .app-mobile-bottom-clearance {
+      padding-bottom: 2.5rem;
+    }
+  }
 }
+

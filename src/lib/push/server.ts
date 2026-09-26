@@ -12,12 +12,44 @@ export interface PushNotificationPayload {
   tag?: string;
 }
 
+import fs from 'node:fs';
+import path from 'node:path';
+
+function getVapidEnv(): { publicKey: string | null; privateKey: string | null; subject: string } {
+  let publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || null;
+  let privateKey = process.env.VAPID_PRIVATE_KEY || null;
+  let subject = process.env.VAPID_SUBJECT || 'mailto:support@oweme.in';
+
+  if ((!publicKey || !privateKey) && process.env.NODE_ENV !== 'test') {
+    try {
+      const envPath = path.join(process.cwd(), '.env.local');
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        const pubMatch = content.match(/^(?:NEXT_PUBLIC_)?VAPID_PUBLIC_KEY\s*=\s*(.+)$/m);
+        const privMatch = content.match(/^VAPID_PRIVATE_KEY\s*=\s*(.+)$/m);
+        const subMatch = content.match(/^VAPID_SUBJECT\s*=\s*(.+)$/m);
+        if (!publicKey && pubMatch && pubMatch[1]) {
+          publicKey = pubMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+        if (!privateKey && privMatch && privMatch[1]) {
+          privateKey = privMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+        if (subMatch && subMatch[1]) {
+          subject = subMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+      }
+    } catch {
+      // Non-blocking in environments without filesystem access
+    }
+  }
+
+  return { publicKey, privateKey, subject };
+}
+
 let configuredKeys: string | null = null;
 
 function ensureVapidConfigured(): boolean {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:support@oweme.in';
+  const { publicKey, privateKey, subject } = getVapidEnv();
 
   if (!publicKey || !privateKey) {
     console.warn('[WebPush] VAPID keys are missing from environment variables.');
@@ -38,6 +70,7 @@ function ensureVapidConfigured(): boolean {
     return false;
   }
 }
+
 
 /**
  * Sends a real Web Push notification to all active devices registered by the specified user.

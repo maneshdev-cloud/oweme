@@ -10,209 +10,411 @@ import type { RecapCardData } from '@/lib/queries/analytics';
 
 export function RecapCard({ data }: { data: RecapCardData }) {
   const [copied, setCopied] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const recapText = [
     `✨ My OweMe Recap • ${data.periodLabel}`,
     `👤 ${data.userName} (@${data.username})`,
-    `💰 Total Tracked: ${formatINR(data.totalTrackedMinor)}`,
+    `💰 Total Money Tracked: ${formatINR(data.totalTrackedMinor)}`,
     `🧾 Expenses Logged: ${data.expenseCount}`,
     `👥 Friends Split With: ${data.distinctFriendsCount}`,
     `🏷️ Top Category: ${data.topCategory.toUpperCase()}`,
     `💬 "${data.funStat}"`,
     '',
     'Track → Notify → Confirm → Settle with OweMe.',
+    'https://oweme.in',
   ].join('\n');
 
-  const handleCopyText = async () => {
-    try {
-      await navigator.clipboard.writeText(recapText);
-      setCopied(true);
-      toast.success('Recap text copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Failed to copy recap text.');
-    }
-  };
-
-  const handleShare = async () => {
-    if (typeof navigator !== 'undefined' && navigator.share) {
+  /**
+   * Resilient clipboard copy with multi-layer fallback.
+   * Works on mobile, desktop, iframes, and insecure origins.
+   */
+  const copyRecapText = async (text: string): Promise<boolean> => {
+    // 1. Modern Clipboard API
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       try {
-        await navigator.share({
-          title: `My OweMe Recap • ${data.periodLabel}`,
-          text: recapText,
-        });
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        toast.success('Recap text copied to clipboard!');
+        setTimeout(() => setCopied(false), 2500);
+        return true;
       } catch {
-        await handleCopyText();
+        // Fall through to execCommand
       }
-    } else {
-      await handleCopyText();
+    }
+
+    // 2. Fallback using hidden textarea & document.execCommand('copy')
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '-9999px';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (success) {
+        setCopied(true);
+        toast.success('Recap text copied to clipboard!');
+        setTimeout(() => setCopied(false), 2500);
+        return true;
+      }
+    } catch {
+      // Fall through to prompt
+    }
+
+    // 3. Last-resort fallback: window.prompt
+    try {
+      window.prompt('Copy your OweMe Recap text:', text);
+      toast.info('Recap text ready to copy.');
+      return true;
+    } catch {
+      toast.error('Unable to copy text to clipboard.');
+      return false;
     }
   };
 
-  const handleDownload = async () => {
-    // Ensure font is loaded before canvas drawing
-    const FONT_FAMILY = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  /**
+   * Renders the high-contrast, crystal-clear OweMe Recap Card to an HTML5 Canvas.
+   * Uses explicit solid colors and guaranteed font fallbacks for high readability.
+   */
+  const renderRecapCanvas = async (): Promise<HTMLCanvasElement> => {
+    // Ensure fonts are loaded before drawing
     if (typeof document !== 'undefined' && 'fonts' in document) {
       try {
-        await document.fonts.load('bold 36px Inter');
-        await document.fonts.load('600 20px Inter');
-        await document.fonts.load('bold 44px Inter');
+        await document.fonts.ready;
       } catch {
-        // Fallback to system stack safely
+        // Fallback safely to system fonts
       }
     }
 
-    // Render a high-res image using an HTML5 offscreen canvas
+    const FONT_STACK = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
     const canvas = document.createElement('canvas');
     canvas.width = 800;
-    canvas.height = 1000;
+    canvas.height = 1040;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) throw new Error('Canvas context unavailable');
 
-    // Draw dark gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 800, 1000);
-    gradient.addColorStop(0, '#0f172a');
-    gradient.addColorStop(0.5, '#1e1b4b');
-    gradient.addColorStop(1, '#090d16');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 800, 1000);
+    // 1. Background gradient (Midnight Indigo / Slate)
+    const bgGradient = ctx.createLinearGradient(0, 0, 800, 1040);
+    bgGradient.addColorStop(0, '#0a0e1a');
+    bgGradient.addColorStop(0.35, '#151336');
+    bgGradient.addColorStop(0.7, '#111827');
+    bgGradient.addColorStop(1, '#080b12');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, 800, 1040);
 
-    // Decorative glow circles
-    const radGlow = ctx.createRadialGradient(200, 200, 10, 200, 200, 400);
-    radGlow.addColorStop(0, 'rgba(99, 102, 241, 0.25)');
-    radGlow.addColorStop(1, 'rgba(99, 102, 241, 0)');
-    ctx.fillStyle = radGlow;
-    ctx.fillRect(0, 0, 800, 1000);
+    // 2. Ambient glow orbs
+    // Top-right indigo glow
+    const topGlow = ctx.createRadialGradient(720, 100, 20, 720, 100, 360);
+    topGlow.addColorStop(0, 'rgba(99, 102, 241, 0.35)');
+    topGlow.addColorStop(0.5, 'rgba(79, 70, 229, 0.15)');
+    topGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, 0, 800, 1040);
 
-    // Brand header
-    ctx.font = `bold 36px ${FONT_FAMILY}`;
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillText('OweMe Recap', 60, 90);
+    // Bottom-left cyan glow
+    const bottomGlow = ctx.createRadialGradient(100, 950, 20, 100, 950, 340);
+    bottomGlow.addColorStop(0, 'rgba(14, 165, 233, 0.25)');
+    bottomGlow.addColorStop(0.6, 'rgba(16, 185, 129, 0.08)');
+    bottomGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bottomGlow;
+    ctx.fillRect(0, 0, 800, 1040);
 
-    ctx.font = `600 20px ${FONT_FAMILY}`;
-    ctx.fillStyle = '#818cf8';
-    ctx.fillText(`• ${data.periodLabel}`, 300, 90);
-
-    // User name
-    ctx.font = `bold 44px ${FONT_FAMILY}`;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(data.userName, 60, 180);
-
-    ctx.font = `500 22px ${FONT_FAMILY}`;
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(`@${data.username}`, 60, 215);
-
-    // Divider line
-    ctx.strokeStyle = '#334155';
+    // Outer card border
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, 798, 1038);
+
+    // 3. Header: Sparkle Box & Title
+    // Sparkle badge background
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.18)';
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(60, 255);
-    ctx.lineTo(740, 255);
-    ctx.stroke();
-
-    // Box 1: Total Tracked
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
-    ctx.roundRect(60, 290, 680, 140, [16]);
-    ctx.fill();
-    ctx.strokeStyle = '#475569';
-    ctx.stroke();
-
-    ctx.font = '500 20px Inter, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('TOTAL MONEY TRACKED', 90, 335);
-
-    ctx.font = 'bold 54px Inter, sans-serif';
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText(formatINR(data.totalTrackedMinor), 90, 400);
-
-    // Box 2: Expenses Logged
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
-    ctx.roundRect(60, 460, 325, 140, [16]);
+    ctx.roundRect(60, 52, 44, 44, [12]);
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = '500 18px Inter, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('EXPENSES LOGGED', 90, 505);
-
-    ctx.font = 'bold 48px Inter, sans-serif';
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillText(String(data.expenseCount), 90, 565);
-
-    // Box 3: Friends Split With
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
-    ctx.roundRect(415, 460, 325, 140, [16]);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.font = '500 18px Inter, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('FRIENDS SPLIT WITH', 445, 505);
-
-    ctx.font = 'bold 48px Inter, sans-serif';
-    ctx.fillStyle = '#34d399';
-    ctx.fillText(String(data.distinctFriendsCount), 445, 565);
-
-    // Box 4: Top Category
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
-    ctx.roundRect(60, 630, 680, 110, [16]);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.font = '500 18px Inter, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('TOP CATEGORY', 90, 675);
-
-    ctx.font = 'bold 36px Inter, sans-serif';
+    // Sparkle icon star
     ctx.fillStyle = '#fbbf24';
-    ctx.fillText(data.topCategory.toUpperCase(), 90, 715);
+    ctx.font = `24px ${FONT_STACK}`;
+    ctx.fillText('✦', 74, 82);
 
-    // Box 5: Fun Stat / Quote
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
-    ctx.roundRect(60, 770, 680, 110, [16]);
+    // Brand Title
+    ctx.font = `bold 32px ${FONT_STACK}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('OweMe Recap', 118, 84);
+
+    // Period Badge (Right-aligned pill)
+    const periodText = data.periodLabel || 'All Time';
+    ctx.font = `600 16px ${FONT_STACK}`;
+    const periodWidth = ctx.measureText(periodText).width;
+    const badgeX = 740 - periodWidth - 28;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, 58, periodWidth + 28, 34, [17]);
     ctx.fill();
-    ctx.strokeStyle = '#6366f1';
     ctx.stroke();
 
-    ctx.font = 'italic 22px Inter, sans-serif';
     ctx.fillStyle = '#e2e8f0';
-    ctx.fillText(`"${data.funStat}"`, 90, 835);
+    ctx.fillText(periodText, badgeX + 14, 81);
 
-    // Footer
-    ctx.font = '500 18px Inter, sans-serif';
+    // 4. User Section
+    ctx.font = `bold 40px ${FONT_STACK}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(data.userName, 60, 155);
+
+    ctx.font = `500 20px ${FONT_STACK}`;
+    ctx.fillStyle = '#a5b4fc';
+    ctx.fillText(`@${data.username}`, 60, 188);
+
+    // Clean divider
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 218);
+    ctx.lineTo(740, 218);
+    ctx.stroke();
+
+    // 5. Stat Box 1: Total Money Tracked (Full Width)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(60, 245, 680, 145, [18]);
+    ctx.fill();
+    ctx.stroke();
+
+    // Box 1 Label: Solid bright slate
+    ctx.font = `600 16px ${FONT_STACK}`;
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('TOTAL MONEY TRACKED', 90, 288);
+
+    // Box 1 Value: Vibrant Cyan
+    ctx.font = `bold 50px ${FONT_STACK}`;
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(formatINR(data.totalTrackedMinor), 90, 354);
+
+    // 6. Stat Box 2: Expenses Logged (Half Width Left)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(60, 415, 325, 145, [18]);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `600 16px ${FONT_STACK}`;
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('EXPENSES LOGGED', 90, 458);
+
+    ctx.font = `bold 48px ${FONT_STACK}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(String(data.expenseCount), 90, 524);
+
+    // 7. Stat Box 3: Friends Split With (Half Width Right)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(415, 415, 325, 145, [18]);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `600 16px ${FONT_STACK}`;
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('FRIENDS SPLIT WITH', 445, 458);
+
+    ctx.font = `bold 48px ${FONT_STACK}`;
+    ctx.fillStyle = '#34d399';
+    ctx.fillText(String(data.distinctFriendsCount), 445, 524);
+
+    ctx.font = `500 13px ${FONT_STACK}`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('count only · names private', 445, 545);
+
+    // 8. Stat Box 4: Top Category (Full Width)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(60, 585, 680, 115, [18]);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `600 16px ${FONT_STACK}`;
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('TOP CATEGORY', 90, 626);
+
+    ctx.font = `bold 34px ${FONT_STACK}`;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText((data.topCategory || 'General').toUpperCase(), 90, 672);
+
+    // 9. Box 5: Quote / Fun Stat (Indigo highlight)
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.18)';
+    ctx.strokeStyle = 'rgba(129, 140, 248, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(60, 725, 680, 120, [18]);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `italic 22px ${FONT_STACK}`;
+    ctx.fillStyle = '#e0e7ff';
+    ctx.fillText(`“${data.funStat}”`, 90, 792);
+
+    // 10. Footer Section
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 885);
+    ctx.lineTo(740, 885);
+    ctx.stroke();
+
+    ctx.font = `500 15px ${FONT_STACK}`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Verified Privacy: Zero counterparty data exposed', 60, 925);
+
+    ctx.font = `bold 16px ${FONT_STACK}`;
+    ctx.fillStyle = '#818cf8';
+    ctx.fillText('oweme.in', 668, 925);
+
+    ctx.font = `400 14px ${FONT_STACK}`;
     ctx.fillStyle = '#64748b';
-    ctx.fillText('Track → Notify → Confirm → Settle · oweme.app', 60, 940);
+    ctx.fillText('Track → Notify → Confirm → Settle', 60, 955);
 
-    const dataUrl = canvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `oweme-recap-${data.username}-${data.periodLabel}.png`;
-    a.click();
-    toast.success('Recap image downloaded!');
+    return canvas;
+  };
+
+  /**
+   * Downloads the high-contrast PNG recap card.
+   */
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    try {
+      const canvas = await renderRecapCanvas();
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `oweme-recap-${data.username}-${data.periodLabel.toLowerCase().replace(/\s+/g, '-')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success('Recap card downloaded!');
+    } catch {
+      toast.error('Failed to generate recap card image.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  /**
+   * Shares the recap using Web Share API with image file support.
+   * Falls back to text share and then clipboard.
+   */
+  const handleShare = async () => {
+    setIsSharing(true);
+    try {
+      const canvas = await renderRecapCanvas();
+
+      // Convert canvas to image file for native image sharing
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const fileName = `oweme-recap-${data.username}.png`;
+      const imageFile = blob ? new File([blob], fileName, { type: 'image/png' }) : null;
+
+      // Check if native Web Share is supported
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        // Try sharing file + text
+        if (imageFile && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+          try {
+            await navigator.share({
+              title: `My OweMe Recap • ${data.periodLabel}`,
+              text: recapText,
+              files: [imageFile],
+            });
+            toast.success('Recap shared!');
+            return;
+          } catch (err: unknown) {
+            if ((err as Error)?.name === 'AbortError') return; // User closed share drawer
+          }
+        }
+
+        // Try sharing text only
+        try {
+          await navigator.share({
+            title: `My OweMe Recap • ${data.periodLabel}`,
+            text: recapText,
+          });
+          toast.success('Recap shared!');
+          return;
+        } catch (err: unknown) {
+          if ((err as Error)?.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: Copy recap text to clipboard
+      await copyRecapText(recapText);
+    } catch {
+      await copyRecapText(recapText);
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   return (
     <div className="space-y-4">
-      {/* Visual Spotify Wrapped-Style Card */}
+      {/* Visual Spotify Wrapped-Style Card with Solid High-Contrast Colors */}
       <div
         ref={cardRef}
-        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 p-6 text-white shadow-2xl backdrop-blur-xl sm:p-8"
+        style={{
+          background: 'linear-gradient(135deg, #0a0e1a 0%, #151336 40%, #0b0f19 100%)',
+          borderColor: 'rgba(255, 255, 255, 0.16)',
+        }}
+        className="relative overflow-hidden rounded-3xl border p-6 text-white shadow-2xl backdrop-blur-xl sm:p-8"
       >
         {/* Glow decoration */}
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div
+          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full blur-3xl opacity-40"
+          style={{ background: '#6366f1' }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full blur-3xl opacity-20"
+          style={{ background: '#0ea5e9' }}
+        />
 
         <div className="relative z-10 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <span
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                  borderColor: 'rgba(245, 158, 11, 0.35)',
+                }}
+                className="grid h-8 w-8 place-items-center rounded-xl border"
+              >
                 <Sparkles className="h-4 w-4 text-amber-400" />
               </span>
-              <span className="font-bold text-sm tracking-wide text-white/90">OweMe Recap</span>
+              <span className="font-bold text-base tracking-wide text-white">OweMe Recap</span>
             </div>
-            <Badge variant="outline" className="border-white/20 bg-white/5 text-xs text-white/80">
+            <Badge
+              variant="outline"
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.22)',
+                color: '#e2e8f0',
+              }}
+              className="text-xs font-semibold px-3 py-1"
+            >
               {data.periodLabel}
             </Badge>
           </div>
@@ -222,71 +424,128 @@ export function RecapCard({ data }: { data: RecapCardData }) {
             <h3 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
               {data.userName}
             </h3>
-            <p className="text-sm font-medium text-white/60">@{data.username}</p>
+            <p className="text-sm font-semibold text-indigo-300">@{data.username}</p>
           </div>
 
           {/* Stats Grid */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
-                Total Tracked
+            {/* Total Money Tracked */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
+              className="rounded-2xl border p-4.5"
+            >
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Total Money Tracked
               </p>
-              <p className="text-2xl font-black text-sky-400 sm:text-3xl">
+              <p className="text-2xl font-black text-sky-400 sm:text-3xl mt-1">
                 {formatINR(data.totalTrackedMinor)}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+            {/* Expenses Logged */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
+              className="rounded-2xl border p-4.5"
+            >
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Expenses Logged
               </p>
-              <p className="text-2xl font-black text-white sm:text-3xl">{data.expenseCount}</p>
+              <p className="text-2xl font-black text-white sm:text-3xl mt-1">
+                {data.expenseCount}
+              </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+            {/* Friends Split With */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
+              className="rounded-2xl border p-4.5"
+            >
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Friends Split With
               </p>
-              <p className="text-2xl font-black text-emerald-400 sm:text-3xl">
+              <p className="text-2xl font-black text-emerald-400 sm:text-3xl mt-1">
                 {data.distinctFriendsCount}
               </p>
-              <p className="text-[10px] text-white/50">count only · names private</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">count only · names private</p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/60">
+            {/* Top Category */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
+              className="rounded-2xl border p-4.5"
+            >
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
                 Top Category
               </p>
-              <p className="text-xl font-bold text-amber-400 uppercase sm:text-2xl">
+              <p className="text-xl font-black text-amber-400 uppercase sm:text-2xl mt-1">
                 {data.topCategory}
               </p>
             </div>
           </div>
 
-          {/* Fun line */}
-          <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 backdrop-blur-md">
-            <p className="text-sm italic text-indigo-200">&ldquo;{data.funStat}&rdquo;</p>
+          {/* Fun line / Quote */}
+          <div
+            style={{
+              backgroundColor: 'rgba(99, 102, 241, 0.16)',
+              borderColor: 'rgba(129, 140, 248, 0.35)',
+            }}
+            className="rounded-2xl border p-4"
+          >
+            <p className="text-sm italic font-medium text-indigo-100">&ldquo;{data.funStat}&rdquo;</p>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between text-[11px] text-white/50 pt-2 border-t border-white/10">
+          <div
+            style={{ borderColor: 'rgba(255, 255, 255, 0.12)' }}
+            className="flex items-center justify-between text-xs text-slate-300 pt-3 border-t font-medium"
+          >
             <span>Verified Privacy: Zero counterparty data exposed</span>
-            <span>oweme.app</span>
+            <span className="font-bold text-indigo-300">oweme.in</span>
           </div>
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={handleCopyText} className="gap-1.5 text-xs">
-          {copied ? <Check className="h-3.5 w-3.5 text-positive" /> : <Copy className="h-3.5 w-3.5" />}
+      <div className="flex flex-wrap items-center justify-end gap-2.5">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => copyRecapText(recapText)}
+          className="gap-1.5 text-xs font-medium"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copied Text' : 'Copy Text'}
         </Button>
-        <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1.5 text-xs">
-          <Download className="h-3.5 w-3.5" /> Download Card
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDownload}
+          disabled={isDownloading}
+          className="gap-1.5 text-xs font-medium"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {isDownloading ? 'Generating...' : 'Download Card'}
         </Button>
-        <Button size="sm" onClick={handleShare} className="gap-1.5 text-xs">
-          <Share2 className="h-3.5 w-3.5" /> Share Recap
+        <Button
+          size="sm"
+          onClick={handleShare}
+          disabled={isSharing}
+          className="gap-1.5 text-xs font-medium"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          {isSharing ? 'Sharing...' : 'Share Recap'}
         </Button>
       </div>
     </div>
@@ -294,4 +553,3 @@ export function RecapCard({ data }: { data: RecapCardData }) {
 }
 
 export default RecapCard;
-
