@@ -172,9 +172,9 @@ export default async function AdminPage() {
       <AdminSettingsPanel
         settings={settings}
         retention={{
-          retention_days: Number(stats?.settings?.retention_days ?? 180),
-          archive_purge_days: Number(stats?.settings?.archive_purge_days ?? 90),
-          archive_notice_days: Number(stats?.settings?.archive_notice_days ?? 30),
+          retention_days: Number(settings.retention_days ?? stats?.settings?.retention_days ?? 60),
+          archive_purge_days: Number(settings.archive_purge_days ?? stats?.settings?.archive_purge_days ?? 90),
+          archive_notice_days: Number(settings.archive_notice_days ?? stats?.settings?.archive_notice_days ?? 30),
         }}
       />
 

@@ -371,7 +371,7 @@ export function RecapCard({ data }: { data: RecapCardData }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-xl">
       {/* Visual Spotify Wrapped-Style Card with Solid High-Contrast Colors */}
       <div
         ref={cardRef}
@@ -379,7 +379,7 @@ export function RecapCard({ data }: { data: RecapCardData }) {
           background: 'linear-gradient(135deg, #0a0e1a 0%, #151336 40%, #0b0f19 100%)',
           borderColor: 'rgba(255, 255, 255, 0.16)',
         }}
-        className="relative overflow-hidden rounded-3xl border p-6 text-white shadow-2xl backdrop-blur-xl sm:p-8"
+        className="relative overflow-hidden rounded-3xl border p-4.5 text-white shadow-2xl backdrop-blur-xl sm:p-6 md:p-8"
       >
         {/* Glow decoration */}
         <div
@@ -391,20 +391,20 @@ export function RecapCard({ data }: { data: RecapCardData }) {
           style={{ background: '#0ea5e9' }}
         />
 
-        <div className="relative z-10 space-y-6">
+        <div className="relative z-10 space-y-4 sm:space-y-5 md:space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 sm:gap-2.5">
               <span
                 style={{
                   backgroundColor: 'rgba(245, 158, 11, 0.15)',
                   borderColor: 'rgba(245, 158, 11, 0.35)',
                 }}
-                className="grid h-8 w-8 place-items-center rounded-xl border"
+                className="grid h-7 w-7 place-items-center rounded-xl border sm:h-8 sm:w-8"
               >
-                <Sparkles className="h-4 w-4 text-amber-400" />
+                <Sparkles className="h-3.5 w-3.5 text-amber-400 sm:h-4 sm:w-4" />
               </span>
-              <span className="font-bold text-base tracking-wide text-white">OweMe Recap</span>
+              <span className="font-bold text-sm tracking-wide text-white sm:text-base">OweMe Recap</span>
             </div>
             <Badge
               variant="outline"
@@ -413,7 +413,7 @@ export function RecapCard({ data }: { data: RecapCardData }) {
                 borderColor: 'rgba(255, 255, 255, 0.22)',
                 color: '#e2e8f0',
               }}
-              className="text-xs font-semibold px-3 py-1"
+              className="text-[11px] font-semibold px-2.5 py-0.5 sm:px-3 sm:py-1 sm:text-xs"
             >
               {data.periodLabel}
             </Badge>
@@ -421,75 +421,81 @@ export function RecapCard({ data }: { data: RecapCardData }) {
 
           {/* User info */}
           <div>
-            <h3 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            <h3 className="truncate text-xl font-bold tracking-tight text-white sm:text-2xl md:text-3xl">
               {data.userName}
             </h3>
-            <p className="text-sm font-semibold text-indigo-300">@{data.username}</p>
+            <p className="text-xs font-semibold text-indigo-300 sm:text-sm">@{data.username}</p>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* Total Money Tracked */}
+          {/* Stats Grid - Matches Canvas Layout: Hero Stat Full Width, Two Counts Side-by-Side, Category Full Width */}
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            {/* Total Money Tracked - Hero Stat spanning full width */}
             <div
               style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 borderColor: 'rgba(255, 255, 255, 0.18)',
               }}
-              className="rounded-2xl border p-4.5"
+              className="col-span-2 rounded-2xl border p-3.5 sm:p-4.5"
             >
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-200 sm:text-xs">
                 Total Money Tracked
               </p>
-              <p className="text-2xl font-black text-sky-400 sm:text-3xl mt-1">
+              <p className="mt-1 text-2xl font-black text-sky-400 sm:text-3xl">
                 {formatINR(data.totalTrackedMinor)}
               </p>
             </div>
 
-            {/* Expenses Logged */}
+            {/* Expenses Logged - Half Width */}
             <div
               style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 borderColor: 'rgba(255, 255, 255, 0.18)',
               }}
-              className="rounded-2xl border p-4.5"
+              className="col-span-1 flex flex-col justify-between rounded-2xl border p-3 sm:p-4.5"
             >
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Expenses Logged
-              </p>
-              <p className="text-2xl font-black text-white sm:text-3xl mt-1">
-                {data.expenseCount}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-200 sm:text-xs">
+                  Expenses Logged
+                </p>
+                <p className="mt-1 text-2xl font-black text-white sm:text-3xl">
+                  {data.expenseCount}
+                </p>
+              </div>
+            </div>
+
+            {/* Friends Split With - Half Width */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.18)',
+              }}
+              className="col-span-1 flex flex-col justify-between rounded-2xl border p-3 sm:p-4.5"
+            >
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-200 sm:text-xs">
+                  Friends Split With
+                </p>
+                <p className="mt-1 text-2xl font-black text-emerald-400 sm:text-3xl">
+                  {data.distinctFriendsCount}
+                </p>
+              </div>
+              <p className="mt-1 text-[10px] leading-tight text-slate-400 sm:text-[11px]">
+                count only · names private
               </p>
             </div>
 
-            {/* Friends Split With */}
+            {/* Top Category - Full Width */}
             <div
               style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 borderColor: 'rgba(255, 255, 255, 0.18)',
               }}
-              className="rounded-2xl border p-4.5"
+              className="col-span-2 rounded-2xl border p-3.5 sm:p-4.5"
             >
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                Friends Split With
-              </p>
-              <p className="text-2xl font-black text-emerald-400 sm:text-3xl mt-1">
-                {data.distinctFriendsCount}
-              </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">count only · names private</p>
-            </div>
-
-            {/* Top Category */}
-            <div
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                borderColor: 'rgba(255, 255, 255, 0.18)',
-              }}
-              className="rounded-2xl border p-4.5"
-            >
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-200">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-200 sm:text-xs">
                 Top Category
               </p>
-              <p className="text-xl font-black text-amber-400 uppercase sm:text-2xl mt-1">
+              <p className="mt-1 text-xl font-black uppercase text-amber-400 sm:text-2xl">
                 {data.topCategory}
               </p>
             </div>
@@ -501,29 +507,29 @@ export function RecapCard({ data }: { data: RecapCardData }) {
               backgroundColor: 'rgba(99, 102, 241, 0.16)',
               borderColor: 'rgba(129, 140, 248, 0.35)',
             }}
-            className="rounded-2xl border p-4"
+            className="rounded-2xl border p-3.5 sm:p-4"
           >
-            <p className="text-sm italic font-medium text-indigo-100">&ldquo;{data.funStat}&rdquo;</p>
+            <p className="text-xs italic font-medium text-indigo-100 sm:text-sm">&ldquo;{data.funStat}&rdquo;</p>
           </div>
 
           {/* Footer */}
           <div
             style={{ borderColor: 'rgba(255, 255, 255, 0.12)' }}
-            className="flex items-center justify-between text-xs text-slate-300 pt-3 border-t font-medium"
+            className="flex items-center justify-between gap-2 border-t pt-3 text-[11px] font-medium text-slate-300 sm:text-xs"
           >
-            <span>Verified Privacy: Zero counterparty data exposed</span>
-            <span className="font-bold text-indigo-300">oweme.in</span>
+            <span className="truncate">Verified Privacy: Zero counterparty data exposed</span>
+            <span className="shrink-0 font-bold text-indigo-300">oweme.in</span>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap items-center justify-end gap-2.5">
+      {/* Action Buttons - 2x2 grid on mobile (with full-width prominent Share button) and flex inline on desktop */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end sm:gap-2.5">
         <Button
           variant="outline"
           size="sm"
           onClick={() => copyRecapText(recapText)}
-          className="gap-1.5 text-xs font-medium"
+          className="w-full gap-1.5 text-xs font-medium sm:w-auto"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copied Text' : 'Copy Text'}
@@ -533,7 +539,7 @@ export function RecapCard({ data }: { data: RecapCardData }) {
           size="sm"
           onClick={handleDownload}
           disabled={isDownloading}
-          className="gap-1.5 text-xs font-medium"
+          className="w-full gap-1.5 text-xs font-medium sm:w-auto"
         >
           <Download className="h-3.5 w-3.5" />
           {isDownloading ? 'Generating...' : 'Download Card'}
@@ -542,7 +548,7 @@ export function RecapCard({ data }: { data: RecapCardData }) {
           size="sm"
           onClick={handleShare}
           disabled={isSharing}
-          className="gap-1.5 text-xs font-medium"
+          className="col-span-2 w-full gap-1.5 text-xs font-medium sm:col-span-1 sm:w-auto"
         >
           <Share2 className="h-3.5 w-3.5" />
           {isSharing ? 'Sharing...' : 'Share Recap'}

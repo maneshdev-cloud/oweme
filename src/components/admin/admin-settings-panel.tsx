@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Archive, CalendarClock, Megaphone, Save, Wrench } from 'lucide-react';
@@ -55,6 +55,24 @@ export function AdminSettingsPanel({
     dismissible: settings.announcement_banner?.dismissible ?? true,
     active: Boolean(settings.announcement_banner),
   });
+
+  useEffect(() => {
+    setAnnouncement({
+      message: settings.announcement_banner?.message ?? '',
+      tone: settings.announcement_banner?.tone ?? ('info' as 'info' | 'warning'),
+      dismissible: settings.announcement_banner?.dismissible ?? true,
+      active: Boolean(settings.announcement_banner),
+    });
+  }, [settings.announcement_banner]);
+
+  useEffect(() => {
+    setDays({
+      retention_days: retention.retention_days,
+      archive_purge_days: retention.archive_purge_days,
+      archive_notice_days: retention.archive_notice_days,
+    });
+  }, [retention.retention_days, retention.archive_purge_days, retention.archive_notice_days]);
+
   const [archiving, setArchiving] = useState(false);
 
   function setBoolean(key: SettingKey, value: boolean) {

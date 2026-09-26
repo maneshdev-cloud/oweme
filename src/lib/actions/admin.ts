@@ -149,8 +149,16 @@ export async function updateAnnouncement(input: unknown): Promise<ActionResult> 
   const parsed = announcementSchema.safeParse(input);
   if (!parsed.success) return fail('Check the announcement text.');
 
+  if (parsed.data.active && parsed.data.message.trim().length === 0) {
+    return fail('Banner message cannot be empty when banner is enabled.');
+  }
+
   const value = parsed.data.active
-    ? { message: parsed.data.message, tone: parsed.data.tone, dismissible: parsed.data.dismissible }
+    ? {
+        message: parsed.data.message.trim(),
+        tone: parsed.data.tone,
+        dismissible: parsed.data.dismissible,
+      }
     : null;
 
   const service = createServiceClient();
@@ -205,9 +213,9 @@ export async function updateAnnouncement(input: unknown): Promise<ActionResult> 
     }
   }
 
+  revalidatePath('/', 'layout');
   revalidatePath('/admin');
   revalidatePath('/home');
-  revalidatePath('/(app)', 'layout');
   return okVoid();
 }
 
@@ -216,21 +224,59 @@ export async function runArchiveNow(): Promise<ActionResult<{ archived: number; 
   if (!admin) return fail('Admins only.');
 
   const service = createServiceClient();
-  if (!service) return fail('Server is missing SUPABASE_SERVICE_ROLE_KEY.');
+  const supabase = await createClient();
 
-  const { data, error } = await service.rpc('archive_settled_records');
-  if (error) return fail(error.message);
+  let data: unknown = null;
+  let lastError: string | null = null;
+
+  if (service) {
+    const { data: serviceData, error: serviceError } = await service.rpc('archive_settled_records');
+    if (!serviceError) {
+      data = serviceData;
+    } else {
+      lastError = serviceError.message;
+    }
+  }
+
+  if (data === null) {
+    const { data: adminData, error: adminError } = await supabase.rpc('archive_settled_records');
+    if (!adminError) {
+      data = adminData;
+    } else {
+      return fail(adminError.message || lastError || 'Unable to execute archive job.');
+    }
+  }
 
   const row = (Array.isArray(data) ? data[0] : data) as
     | { archived_count: number; notice_count: number; purged_count: number }
     | undefined;
 
-  await service.from('admin_audit_log').insert({
-    actor_id: admin.id,
-    action: 'retention:run_archive',
-    payload: row ?? {},
-  });
-  await log.info('admin_archive_run', 'retention job triggered manually', { ...row }, admin.id);
+  if (service) {
+    try {
+      await service.from('admin_audit_log').insert({
+        actor_id: admin.id,
+        action: 'retention:run_archive',
+        payload: row ?? {},
+      });
+    } catch {
+      // Non-blocking
+    }
+  } else {
+    try {
+      await supabase.rpc('record_admin_audit', {
+        p_action: 'retention:run_archive',
+        p_payload: row ?? {},
+      });
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  try {
+    await log.info('admin_archive_run', 'retention job triggered manually', { ...row }, admin.id);
+  } catch {
+    // Non-blocking
+  }
 
   revalidatePath('/admin');
   return ok({
