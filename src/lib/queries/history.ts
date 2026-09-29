@@ -33,7 +33,11 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   if (filters.to) expenseQuery = expenseQuery.lte('created_at', `${filters.to}T23:59:59.999Z`);
   if (filters.query) expenseQuery = expenseQuery.ilike('description', `%${filters.query}%`);
   if (filters.personId) {
-    expenseQuery = expenseQuery.or(`payer_id.eq.${filters.personId},debtor_id.eq.${filters.personId}`);
+    expenseQuery = expenseQuery.or(
+      `and(payer_id.eq.${user.id},debtor_id.eq.${filters.personId}),and(payer_id.eq.${filters.personId},debtor_id.eq.${user.id})`,
+    );
+  } else {
+    expenseQuery = expenseQuery.or(`payer_id.eq.${user.id},debtor_id.eq.${user.id}`);
   }
   if (filters.status === 'settled') expenseQuery = expenseQuery.eq('status', 'CONFIRMED');
   if (filters.status === 'pending') expenseQuery = expenseQuery.in('status', ['PENDING', 'PAYMENT_MARKED']);
@@ -73,10 +77,14 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   if (filters.from) settlementQuery = settlementQuery.gte('created_at', filters.from);
   if (filters.to) settlementQuery = settlementQuery.lte('created_at', `${filters.to}T23:59:59.999Z`);
   if (filters.personId) {
-    settlementQuery = settlementQuery.or(`payer_id.eq.${filters.personId},receiver_id.eq.${filters.personId}`);
+    settlementQuery = settlementQuery.or(
+      `and(payer_id.eq.${user.id},receiver_id.eq.${filters.personId}),and(payer_id.eq.${filters.personId},receiver_id.eq.${user.id})`,
+    );
+  } else {
+    settlementQuery = settlementQuery.or(`payer_id.eq.${user.id},receiver_id.eq.${user.id}`);
   }
   if (filters.status === 'settled') settlementQuery = settlementQuery.eq('status', 'CONFIRMED');
-  if (filters.status === 'pending') settlementQuery = settlementQuery.in('status', ['PENDING']);
+  if (filters.status === 'pending') settlementQuery = settlementQuery.eq('status', 'PENDING');
   if (filters.status === 'disputed') settlementQuery = settlementQuery.eq('status', 'DISPUTED');
   if (filters.status === 'cancelled') settlementQuery = settlementQuery.eq('status', 'CANCELLED');
 
@@ -95,7 +103,17 @@ export async function getHistory(filters: HistoryFilters = {}): Promise<HistoryE
   if (filters.from) groupExpenseQuery = groupExpenseQuery.gte('created_at', filters.from);
   if (filters.to) groupExpenseQuery = groupExpenseQuery.lte('created_at', `${filters.to}T23:59:59.999Z`);
   if (filters.query) groupExpenseQuery = groupExpenseQuery.ilike('description', `%${filters.query}%`);
-  if (filters.groupId) groupExpenseQuery = groupExpenseQuery.eq('group_id', filters.groupId);
+  if (filters.groupId) {
+    groupExpenseQuery = groupExpenseQuery.eq('group_id', filters.groupId);
+  } else {
+    const { data: myMemberships } = await supabase.from('group_members').select('group_id').eq('user_id', user.id);
+    const myGroupIds = (myMemberships ?? []).map((m) => m.group_id);
+    if (myGroupIds.length === 0) {
+      groupExpenseQuery = groupExpenseQuery.in('group_id', ['00000000-0000-0000-0000-000000000000']);
+    } else {
+      groupExpenseQuery = groupExpenseQuery.in('group_id', myGroupIds);
+    }
+  }
 
   const { data: groupExpenses } = await groupExpenseQuery;
 

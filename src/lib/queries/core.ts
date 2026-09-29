@@ -144,6 +144,7 @@ export const getDashboard = cache(async (): Promise<DashboardData> => {
       .select(
         'id, payer_id, debtor_id, amount, currency, description, category, status, created_by, created_at, updated_at, settled_at',
       )
+      .or(`payer_id.eq.${user.id},debtor_id.eq.${user.id}`)
       .order('created_at', { ascending: false })
       .limit(40),
     getUnreadNotificationCount(),

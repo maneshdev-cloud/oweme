@@ -94,6 +94,7 @@ export async function getFriendRequests(): Promise<PendingRequest[]> {
     .from('friendships')
     .select('id, requester_id, addressee_id, created_at')
     .eq('status', 'pending')
+    .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
     .order('created_at', { ascending: false });
 
   const rows = (data ?? []) as Array<{

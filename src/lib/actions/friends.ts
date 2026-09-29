@@ -78,23 +78,37 @@ export async function respondToFriendRequest(input: unknown): Promise<ActionResu
 
   const supabase = await createClient();
 
-  let requesterId: string | null = null;
-  if (response === 'accept') {
-    const { data: current } = await supabase
-      .from('friendships')
-      .select('requester_id')
-      .eq('id', friendshipId)
-      .maybeSingle();
-    requesterId = current?.requester_id ?? null;
+  const { data: current } = await supabase
+    .from('friendships')
+    .select('id, requester_id, addressee_id, status')
+    .eq('id', friendshipId)
+    .maybeSingle();
+
+  if (!current || current.status !== 'pending') {
+    return fail('That request is no longer available.');
   }
 
-  const { error } = await supabase.from('friendships').update({ status }).eq('id', friendshipId);
+  if (response === 'accept' || response === 'decline') {
+    if (current.addressee_id !== user.id) {
+      return fail('Only the person who received this friend request can respond to it.');
+    }
+  } else if (response === 'cancel') {
+    if (current.requester_id !== user.id) {
+      return fail('Only the person who sent this friend request can cancel it.');
+    }
+  }
+
+  const { error } = await supabase
+    .from('friendships')
+    .update({ status })
+    .eq('id', friendshipId)
+    .eq(response === 'cancel' ? 'requester_id' : 'addressee_id', user.id);
 
   if (error) return fail(error.message);
 
-  if (response === 'accept' && requesterId) {
+  if (response === 'accept' && current.requester_id) {
     const actorName = user.user_metadata?.full_name?.split(' ')[0] || 'Friend';
-    void sendPushNotificationToUser(requesterId, {
+    void sendPushNotificationToUser(current.requester_id, {
       type: 'friend_accepted',
       title: 'Friend request accepted',
       body: `${actorName} accepted your friend request on OWEME.`,
@@ -109,7 +123,7 @@ export async function respondToFriendRequest(input: unknown): Promise<ActionResu
 }
 
 export async function removeFriend(input: unknown): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
   const maintenanceBlock = await assertMaintenanceAllowsWrites();
   if (maintenanceBlock) return maintenanceBlock;
 
@@ -121,7 +135,8 @@ export async function removeFriend(input: unknown): Promise<ActionResult> {
     .from('friendships')
     .update({ status: 'cancelled' })
     .eq('id', parsed.data.friendshipId)
-    .eq('status', 'accepted');
+    .eq('status', 'accepted')
+    .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
 
   if (error) return fail(error.message);
   revalidatePath('/friends');
