@@ -107,6 +107,83 @@ export const createGroupExpenseSchema = z
     }
   });
 
+export const updateGroupExpenseSchema = z
+  .object({
+    expenseId: uuid,
+    groupId: uuid,
+    amount: amountString,
+    description: descriptionField,
+    category: categoryField,
+    paidBy: uuid.optional(),
+    payers: z.array(groupPayerItemSchema).optional(),
+    participantIds: z.array(uuid).max(50).optional(),
+    shares: z.array(groupShareItemSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    let totalPaise = 0;
+    try {
+      totalPaise = toMinor(data.amount);
+    } catch {
+      return;
+    }
+
+    const payers =
+      data.payers && data.payers.length > 0
+        ? data.payers
+        : data.paidBy
+          ? [{ userId: data.paidBy, amount: data.amount }]
+          : [];
+
+    if (payers.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paidBy'],
+        message: 'Select who paid the bill',
+      });
+      return;
+    }
+
+    let payersSumPaise = 0;
+    for (const p of payers) {
+      try {
+        payersSumPaise += toMinor(p.amount);
+      } catch {
+        return;
+      }
+    }
+    if (payersSumPaise !== totalPaise) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['payers'],
+        message: 'Sum of payer amounts must match total amount',
+      });
+    }
+
+    if (data.shares && data.shares.length > 0) {
+      let sharesSumPaise = 0;
+      for (const s of data.shares) {
+        try {
+          sharesSumPaise += toMinor(s.amount);
+        } catch {
+          return;
+        }
+      }
+      if (sharesSumPaise !== totalPaise) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['shares'],
+          message: 'Sum of share amounts must match total amount',
+        });
+      }
+    } else if (!data.participantIds || data.participantIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['participantIds'],
+        message: 'Pick at least one person to split with',
+      });
+    }
+  });
+
 export const expenseTransitionSchema = z.object({
   expenseId: uuid,
   action: z.enum(['mark_paid', 'confirm', 'dispute', 'cancel']),

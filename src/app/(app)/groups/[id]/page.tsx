@@ -8,7 +8,7 @@ import { Amount } from '@/components/money';
 import { PersonAvatar } from '@/components/person-avatar';
 import { CategoryChip } from '@/components/category-chip';
 import { StatusBadge } from '@/components/status-badge';
-import { AddGroupExpenseDialog } from '@/components/groups/add-group-expense-dialog';
+import { AddGroupExpenseDialog, EditGroupExpenseDialog } from '@/components/groups/add-group-expense-dialog';
 import { GroupMemberActions } from '@/components/groups/group-member-actions';
 import { DeleteGroupDialog } from '@/components/groups/delete-group-dialog';
 import { SettleUpButton } from '@/components/settle-up-dialog';
@@ -18,7 +18,7 @@ import { getGroupDetail } from '@/lib/queries/social';
 import { getAppSettings } from '@/lib/queries/core';
 import { formatINR, toMinor } from '@/lib/money';
 import { minimizeTransfers } from '@/lib/settlement';
-import { timeAgo } from '@/lib/utils';
+import { formatDateTime, isEdited, timeAgo } from '@/lib/utils';
 
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -217,26 +217,46 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                   <CardContent className="space-y-2 p-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {expense.description}{' '}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-medium">
+                            {expense.description}
+                          </p>
                           <CategoryChip category={expense.category} className="align-middle" />
-                        </p>
+                          {isEdited(expense.created_at, expense.updated_at) && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 font-normal border-muted-foreground/30 text-muted-foreground"
+                              title={`Edited on ${expense.updated_at ? formatDateTime(expense.updated_at) : ''}`}
+                            >
+                              Edited
+                            </Badge>
+                          )}
+                        </div>
                         {expense.payers && expense.payers.length > 1 ? (
                           <p className="truncate text-xs text-muted-foreground">
                             {expense.payers.length} people paid {formatINR(toMinor(expense.amount))} (
                             {expense.payers
                               .map((p) => `${nameOf(p.user_id)} ${formatINR(toMinor(p.paid_amount))}`)
                               .join(', ')}
-                            ) · {timeAgo(expense.created_at)}
+                            ) · <span title={formatDateTime(expense.created_at)}>{timeAgo(expense.created_at)}</span>
                           </p>
                         ) : (
                           <p className="truncate text-xs text-muted-foreground">
                             {nameOf(expense.paid_by)} paid {formatINR(toMinor(expense.amount))} ·{' '}
-                            {timeAgo(expense.created_at)}
+                            <span title={formatDateTime(expense.created_at)}>{timeAgo(expense.created_at)}</span>
                           </p>
                         )}
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        {isOwner && expense.status !== 'CANCELLED' && (
+                          <EditGroupExpenseDialog
+                            groupId={group.id}
+                            members={members}
+                            currentUserId={user.id}
+                            expense={expense}
+                            disabled={disabled}
+                          />
+                        )}
                         <StatusBadge status={expense.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING'} />
                       </div>
                     </div>

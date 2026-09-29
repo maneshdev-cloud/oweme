@@ -8,6 +8,7 @@ import { splitEqually } from '@/lib/split';
 import {
   createExpenseSchema,
   createGroupExpenseSchema,
+  updateGroupExpenseSchema,
   expenseTransitionSchema,
   settlementActionSchema,
   settlementSchema,
@@ -547,6 +548,57 @@ export async function createGroupExpense(
   revalidatePath(`/groups/${groupId}`);
   revalidatePath('/groups');
   return ok({ id: expRow.id, duplicate: false });
+}
+
+export async function updateGroupExpense(input: unknown): Promise<ActionResult> {
+  const user = await requireUser();
+  const maintenanceBlock = await assertMaintenanceAllowsWrites();
+  if (maintenanceBlock) return maintenanceBlock;
+
+  const parsed = updateGroupExpenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? 'Check the form', parsed.error.flatten().fieldErrors);
+  }
+  const { expenseId, groupId, amount, description, category } = parsed.data;
+
+  const payers =
+    parsed.data.payers && parsed.data.payers.length > 0
+      ? parsed.data.payers
+      : parsed.data.paidBy
+        ? [{ userId: parsed.data.paidBy, amount: parsed.data.amount }]
+        : [];
+
+  type ShareItem = { userId: string; amount: string };
+  const shares: ShareItem[] =
+    parsed.data.shares && parsed.data.shares.length > 0
+      ? parsed.data.shares
+      : parsed.data.participantIds && parsed.data.participantIds.length > 0
+        ? splitEqually(toMinor(amount), parsed.data.participantIds).map(
+            (s: { userId: string; share: number }) => ({
+              userId: s.userId,
+              amount: toAmountString(s.share),
+            }),
+          )
+        : [];
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc('update_group_expense_v2', {
+    p_expense_id: expenseId,
+    p_amount: toAmountString(toMinor(amount)),
+    p_description: description.trim(),
+    p_category: category.trim() || 'Other',
+    p_payers: payers.map((p) => ({ user_id: p.userId, amount: Number(p.amount) })),
+    p_shares: shares.map((s) => ({ user_id: s.userId, amount: Number(s.amount) })),
+  });
+
+  if (error) {
+    return fail(friendly(error));
+  }
+
+  revalidatePath(`/groups/${groupId}`);
+  revalidatePath('/groups');
+  return okVoid();
 }
 
 export async function cancelGroupExpense(input: unknown): Promise<ActionResult> {

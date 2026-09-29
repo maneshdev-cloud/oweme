@@ -24,6 +24,22 @@ export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export function isEdited(createdAt: string, updatedAt?: string | null): boolean {
+  if (!updatedAt) return false;
+  return Math.abs(new Date(updatedAt).getTime() - new Date(createdAt).getTime()) > 3000;
+}
+
 export function initials(name: string): string {
   return name
     .split(/\s+/)

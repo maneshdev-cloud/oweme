@@ -112,6 +112,7 @@ export type GroupExpense = {
   status: 'PENDING' | 'CANCELLED';
   created_by: string;
   created_at: string;
+  updated_at?: string;
   cancelled_at: string | null;
   shares: { user_id: string; share_amount: number }[];
   payers?: { user_id: string; paid_amount: number }[];

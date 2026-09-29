@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Plus,
+  Pencil,
   Wallet,
   PieChart,
   Scale,
@@ -33,31 +34,109 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { CheckboxRow } from '@/components/groups/checkbox-row';
 import { PersonAvatar } from '@/components/person-avatar';
-import { createGroupExpense } from '@/lib/actions/expenses';
+import { createGroupExpense, updateGroupExpense } from '@/lib/actions/expenses';
 import { CATEGORIES } from '@/lib/constants';
 import { getCategoryIcon } from '@/lib/category-icons';
-import { formatINR, parseAmountInput, sanitizeAmountInput, toAmountString } from '@/lib/money';
+import { formatINR, parseAmountInput, sanitizeAmountInput, toAmountString, toMinor } from '@/lib/money';
 import { splitEqually } from '@/lib/split';
 import { minimizeTransfers, type Balance } from '@/lib/settlement';
-import type { GroupMemberRow } from '@/lib/types';
+import type { GroupExpense, GroupMemberRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type ExpenseMode = 'split_equal' | 'divide_custom';
 type PayerType = 'single' | 'multiple';
+
+function getInitialExpenseState(
+  expenseToEdit: GroupExpense | undefined,
+  members: GroupMemberRow[],
+  currentUserId: string,
+) {
+  if (expenseToEdit) {
+    const isMultiPayer = (expenseToEdit.payers?.length ?? 0) > 1;
+    const initialPayerAmounts: Record<string, string> = {};
+    if (expenseToEdit.payers && expenseToEdit.payers.length > 0) {
+      for (const p of expenseToEdit.payers) {
+        initialPayerAmounts[p.user_id] = (toMinor(p.paid_amount) / 100).toFixed(2);
+      }
+    }
+
+    const shareMap: Record<string, string> = {};
+    const participantList: string[] = [];
+    for (const s of expenseToEdit.shares) {
+      shareMap[s.user_id] = (toMinor(s.share_amount) / 100).toFixed(2);
+      participantList.push(s.user_id);
+    }
+
+    // Check if shares are equal among participants
+    const totalMinor = toMinor(expenseToEdit.amount);
+    let sharesAreEqual = participantList.length > 0;
+    if (sharesAreEqual) {
+      const equalSplits = splitEqually(totalMinor, participantList);
+      for (const es of equalSplits) {
+        if (Math.abs(es.share - toMinor(shareMap[es.userId] ?? '0')) > 1) {
+          sharesAreEqual = false;
+          break;
+        }
+      }
+    }
+
+    const initialMode: ExpenseMode = !isMultiPayer && sharesAreEqual ? 'split_equal' : 'divide_custom';
+
+    return {
+      mode: initialMode,
+      totalAmount: (toMinor(expenseToEdit.amount) / 100).toFixed(2),
+      description: expenseToEdit.description ?? '',
+      category: expenseToEdit.category ?? 'Project',
+      payerType: isMultiPayer ? ('multiple' as PayerType) : ('single' as PayerType),
+      singlePayerId: expenseToEdit.paid_by || expenseToEdit.payers?.[0]?.user_id || currentUserId,
+      payerAmounts: initialPayerAmounts,
+      participants: participantList.length > 0 ? participantList : members.map((m) => m.user_id),
+      shareAmounts: shareMap,
+    };
+  }
+
+  return {
+    mode: 'split_equal' as ExpenseMode,
+    totalAmount: '',
+    description: '',
+    category: 'Project',
+    payerType: 'single' as PayerType,
+    singlePayerId: currentUserId,
+    payerAmounts: {} as Record<string, string>,
+    participants: members.map((m) => m.user_id),
+    shareAmounts: {} as Record<string, string>,
+  };
+}
 
 export function AddGroupExpenseDialog({
   groupId,
   members,
   currentUserId,
   disabled,
+  expenseToEdit,
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: {
   groupId: string;
   members: GroupMemberRow[];
   currentUserId: string;
   disabled?: boolean;
+  expenseToEdit?: GroupExpense;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const isEditing = Boolean(expenseToEdit);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (val: boolean) => {
+    if (controlledOnOpenChange) controlledOnOpenChange(val);
+    else setInternalOpen(val);
+  };
+
   const [mode, setMode] = useState<ExpenseMode>('split_equal');
 
   // Common fields
@@ -80,22 +159,23 @@ export function AddGroupExpenseDialog({
   const [pending, startTransition] = useTransition();
   const requestId = useRef(crypto.randomUUID());
 
-  // Reset form when dialog opens/closes
+  // Reset or initialize form when dialog opens/closes or expenseToEdit changes
   useEffect(() => {
-    if (!open) {
-      setMode('split_equal');
-      setTotalAmount('');
-      setDescription('');
-      setCategory('Project');
-      setPayerType('single');
-      setSinglePayerId(currentUserId);
-      setPayerAmounts({});
-      setParticipants(members.map((m) => m.user_id));
-      setShareAmounts({});
+    if (open) {
+      const init = getInitialExpenseState(expenseToEdit, members, currentUserId);
+      setMode(init.mode);
+      setTotalAmount(init.totalAmount);
+      setDescription(init.description);
+      setCategory(init.category);
+      setPayerType(init.payerType);
+      setSinglePayerId(init.singlePayerId);
+      setPayerAmounts(init.payerAmounts);
+      setParticipants(init.participants);
+      setShareAmounts(init.shareAmounts);
       setError(null);
       requestId.current = crypto.randomUUID();
     }
-  }, [open, members, currentUserId]);
+  }, [open, expenseToEdit, members, currentUserId]);
 
   const totalMinor = parseAmountInput(totalAmount) ?? 0;
 
@@ -172,7 +252,6 @@ export function AddGroupExpenseDialog({
 
   // Settlement transfers (who pays whom)
   const transfers = useMemo(() => {
-    // Only calculate when numbers balance out (sum of net balances is 0)
     const netSum = netBalances.reduce((sum, b) => sum + b.amount, 0);
     if (netSum !== 0 || totalMinor <= 0) return [];
     try {
@@ -215,6 +294,19 @@ export function AddGroupExpenseDialog({
     }
   };
 
+  const handleSetFullPayerForPerson = (userId: string) => {
+    if (totalMinor <= 0) {
+      toast.error('Enter the total bill amount first.');
+      return;
+    }
+    const fullStr = (totalMinor / 100).toFixed(2);
+    const next: Record<string, string> = {};
+    for (const m of members) {
+      next[m.user_id] = m.user_id === userId ? fullStr : '';
+    }
+    setPayerAmounts(next);
+  };
+
   const handleFillRemainingShare = (userId: string) => {
     const currentShareSum = Object.entries(shareAmounts).reduce((sum, [id, val]) => {
       if (id === userId) return sum;
@@ -227,6 +319,19 @@ export function AddGroupExpenseDialog({
         [userId]: (remaining / 100).toFixed(2),
       }));
     }
+  };
+
+  const handleSetFullShareForPerson = (userId: string) => {
+    if (totalMinor <= 0) {
+      toast.error('Enter the total bill amount first.');
+      return;
+    }
+    const fullStr = (totalMinor / 100).toFixed(2);
+    const next: Record<string, string> = {};
+    for (const m of members) {
+      next[m.user_id] = m.user_id === userId ? fullStr : '';
+    }
+    setShareAmounts(next);
   };
 
   // Mode change handler
@@ -249,6 +354,14 @@ export function AddGroupExpenseDialog({
       }
     }
   };
+
+  const eligibleSingleParticipants = useMemo(() => {
+    if (payerType === 'single' && singlePayerId) {
+      const others = members.filter((m) => m.user_id !== singlePayerId);
+      return others.length > 0 ? others : members;
+    }
+    return members;
+  }, [members, payerType, singlePayerId]);
 
   // Validation before submission
   const validationIssues = useMemo(() => {
@@ -287,6 +400,12 @@ export function AddGroupExpenseDialog({
     if (mode === 'split_equal') {
       if (participants.length === 0) {
         issues.push('Pick at least one person to split with.');
+      } else if (
+        payerType === 'single' &&
+        participants.length === 1 &&
+        participants[0] === singlePayerId
+      ) {
+        issues.push('A group expense cannot be solely for the payer. Select who you paid for, or choose Everyone.');
       }
     } else {
       if (totalShareMinor !== totalMinor) {
@@ -296,6 +415,11 @@ export function AddGroupExpenseDialog({
         } else {
           issues.push(`Shares exceed total bill by ${formatINR(diff)}.`);
         }
+      } else if (
+        payerType === 'single' &&
+        shareMinorByUser[singlePayerId] === totalMinor
+      ) {
+        issues.push('A group expense cannot be solely for the payer. Allocate shares to other group members.');
       }
     }
 
@@ -309,6 +433,7 @@ export function AddGroupExpenseDialog({
     totalPaidMinor,
     participants,
     totalShareMinor,
+    shareMinorByUser,
   ]);
 
   const isValid = validationIssues.length === 0;
@@ -345,17 +470,29 @@ export function AddGroupExpenseDialog({
         }));
       }
 
-      const result = await createGroupExpense({
-        groupId,
-        amount: toAmountString(totalMinor),
-        description: description.trim(),
-        category,
-        paidBy: payersPayload[0]?.userId,
-        payers: payersPayload,
-        participantIds: mode === 'split_equal' ? participants : undefined,
-        shares: sharesPayload,
-        clientRequestId: requestId.current,
-      });
+      const result = isEditing && expenseToEdit
+        ? await updateGroupExpense({
+            expenseId: expenseToEdit.id,
+            groupId,
+            amount: toAmountString(totalMinor),
+            description: description.trim(),
+            category,
+            paidBy: payersPayload[0]?.userId,
+            payers: payersPayload,
+            participantIds: mode === 'split_equal' ? participants : undefined,
+            shares: sharesPayload,
+          })
+        : await createGroupExpense({
+            groupId,
+            amount: toAmountString(totalMinor),
+            description: description.trim(),
+            category,
+            paidBy: payersPayload[0]?.userId,
+            payers: payersPayload,
+            participantIds: mode === 'split_equal' ? participants : undefined,
+            shares: sharesPayload,
+            clientRequestId: requestId.current,
+          });
 
       if (!result.ok) {
         setError(result.error);
@@ -363,7 +500,11 @@ export function AddGroupExpenseDialog({
         return;
       }
 
-      toast.success(`Recorded ${formatINR(totalMinor)} in the group.`);
+      toast.success(
+        isEditing
+          ? `Updated expense to ${formatINR(totalMinor)}.`
+          : `Recorded ${formatINR(totalMinor)} in the group.`
+      );
       setOpen(false);
       router.refresh();
     });
@@ -371,16 +512,37 @@ export function AddGroupExpenseDialog({
 
   return (
     <>
-      <Button onClick={() => setOpen(true)} disabled={disabled}>
-        <Plus className="h-4 w-4" /> Add group expense
-      </Button>
+      {trigger ? (
+        <span onClick={() => setOpen(true)} className="inline-block cursor-pointer">
+          {trigger}
+        </span>
+      ) : isEditing ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          <span>Edit</span>
+        </Button>
+      ) : (
+        <Button onClick={() => setOpen(true)} disabled={disabled}>
+          <Plus className="h-4 w-4" /> Add group expense
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl">Add group expense</DialogTitle>
+            <DialogTitle className="text-xl">
+              {isEditing ? 'Edit group expense' : 'Add group expense'}
+            </DialogTitle>
             <DialogDescription>
-              Record an expense and let OweMe calculate balances and settlements automatically.
+              {isEditing
+                ? 'Update expense details, payers, or split. Balances and settle-up plans will update dynamically.'
+                : 'Record an expense and let OweMe calculate balances and settlements automatically.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -665,25 +827,41 @@ export function AddGroupExpenseDialog({
               </div>
 
               {mode === 'split_equal' ? (
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => setParticipants(members.map((m) => m.user_id))}
-                    className="text-primary hover:underline"
+                    className={cn(
+                      'rounded px-2 py-1 text-xs transition-colors',
+                      participants.length === members.length
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 font-medium'
+                        : 'text-primary hover:underline',
+                    )}
                   >
                     Everyone
                   </button>
                   <span className="text-muted-foreground">·</span>
-                  <button
-                    type="button"
-                    onClick={() => setParticipants([currentUserId])}
-                    className="text-primary hover:underline"
+                  <Select
+                    value={participants.length === 1 && participants[0] !== singlePayerId ? participants[0] : ''}
+                    onValueChange={(userId) => setParticipants([userId])}
                   >
-                    Only me
-                  </button>
+                    <SelectTrigger
+                      aria-label="Paid entire bill for one person"
+                      className="h-7 w-auto min-w-[170px] gap-1 px-2.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 font-medium"
+                    >
+                      <SelectValue placeholder="Paid entire bill for one person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleSingleParticipants.map((member) => (
+                        <SelectItem key={member.user_id} value={member.user_id} className="text-xs">
+                          Paid full bill for {fullNameFor(member.user_id)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={handleEqualizeShares}
@@ -691,6 +869,25 @@ export function AddGroupExpenseDialog({
                   >
                     <Sparkles className="h-3 w-3" /> Split shares equally
                   </button>
+                  <span className="text-muted-foreground">·</span>
+                  <Select
+                    value=""
+                    onValueChange={(userId) => handleSetFullShareForPerson(userId)}
+                  >
+                    <SelectTrigger
+                      aria-label="Paid entire bill for one person"
+                      className="h-7 w-auto min-w-[170px] gap-1 px-2.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 font-medium"
+                    >
+                      <SelectValue placeholder="Paid entire bill for one person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleSingleParticipants.map((member) => (
+                        <SelectItem key={member.user_id} value={member.user_id} className="text-xs">
+                          100% share for {fullNameFor(member.user_id)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>
@@ -698,10 +895,23 @@ export function AddGroupExpenseDialog({
             {/* Mode 1: Equal Split Checkboxes */}
             {mode === 'split_equal' ? (
               <div className="mt-2 space-y-2">
+                {participants.length === 1 && participants[0] !== singlePayerId ? (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <span>
+                      <strong>{nameFor(singlePayerId)}</strong> paid the whole bill for <strong>{nameFor(participants[0])}</strong>. Only {nameFor(participants[0])} will owe this amount.
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Choose <strong>Everyone</strong> to split equally, or select someone above if you paid the entire bill for them.
+                  </p>
+                )}
                 <ul className="space-y-1">
                   {members.map((member) => {
                     const isChecked = participants.includes(member.user_id);
                     const sharePaise = shareMinorByUser[member.user_id] ?? 0;
+
                     return (
                       <li key={member.user_id}>
                         <CheckboxRow
@@ -736,7 +946,7 @@ export function AddGroupExpenseDialog({
 
                 {totalMinor > 0 && participants.length > 0 && (
                   <p className="text-xs text-muted-foreground pt-1">
-                    Divided equally across {participants.length} member{participants.length === 1 ? '' : 's'} (
+                    Divided across {participants.length} member{participants.length === 1 ? '' : 's'} (
                     {formatINR(Math.round(totalMinor / participants.length))} each).
                   </p>
                 )}
@@ -935,11 +1145,38 @@ export function AddGroupExpenseDialog({
               disabled={pending || !isValid}
               className="min-w-[130px]"
             >
-              Add to group
+              {isEditing ? 'Save changes' : 'Add to group'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+export function EditGroupExpenseDialog({
+  groupId,
+  members,
+  currentUserId,
+  expense,
+  disabled,
+  trigger,
+}: {
+  groupId: string;
+  members: GroupMemberRow[];
+  currentUserId: string;
+  expense: GroupExpense;
+  disabled?: boolean;
+  trigger?: React.ReactNode;
+}) {
+  return (
+    <AddGroupExpenseDialog
+      groupId={groupId}
+      members={members}
+      currentUserId={currentUserId}
+      expenseToEdit={expense}
+      disabled={disabled}
+      trigger={trigger}
+    />
   );
 }
