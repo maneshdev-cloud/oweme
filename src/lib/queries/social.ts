@@ -242,7 +242,11 @@ export async function getGroupDetail(groupId: string): Promise<{
 
   const memberRows = (membersResult.data ?? []) as Array<{ user_id: string; role: 'owner' | 'member' }>;
   const balances = (balancesResult.data ?? []) as GroupBalanceRow[];
-  const people = await profilesFor(memberRows.map((row) => row.user_id));
+  const userIdsToFetch = new Set<string>([
+    ...memberRows.map((row) => row.user_id),
+    ...((expensesResult.data ?? []).flatMap((e: { created_by?: string; paid_by?: string }) => [e.created_by, e.paid_by]).filter(Boolean) as string[]),
+  ]);
+  const people = await profilesFor(Array.from(userIdsToFetch));
   const balanceByUser = new Map(balances.map((row) => [row.user_id, row]));
 
   const expenses = (

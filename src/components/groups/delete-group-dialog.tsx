@@ -65,38 +65,41 @@ export function DeleteGroupDialog({
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" /> Delete group
           </DialogTitle>
-          <DialogDescription className="space-y-2 pt-2 text-left">
-            {hasUnsettled ? (
-              <span className="block text-sm text-foreground">
-                This group cannot be deleted yet because some members have open balances. Please settle all balances
-                first:
-                <ul className="mt-2 space-y-1 rounded-lg bg-muted p-2.5 text-xs">
-                  {unsettledMembers.map((m) => (
-                    <li key={m.user_id} className="flex justify-between">
-                      <span>{m.profile.full_name}</span>
-                      <span className="font-semibold">{m.net > 0 ? `gets back ₹${m.net}` : `owes ₹${Math.abs(m.net)}`}</span>
-                    </li>
-                  ))}
-                </ul>
-              </span>
-            ) : (
-              <span className="block text-sm text-muted-foreground">
-                Are you sure you want to delete <strong className="text-foreground">{groupName}</strong>? All group
-                expenses, history, and member lists will be permanently deleted for all members. This action cannot be
-                undone.
-              </span>
-            )}
+          <DialogDescription asChild>
+            <div className="space-y-2 pt-2 text-left text-sm text-muted-foreground">
+              {hasUnsettled ? (
+                <div className="text-foreground">
+                  <span className="font-medium text-destructive">Notice: This group has open unsettled balances.</span>{' '}
+                  Deleting it will permanently delete all group expenses, settlements, and discard these remaining balances:
+                  <ul className="mt-2 space-y-1 rounded-lg bg-muted p-2.5 text-xs text-foreground">
+                    {unsettledMembers.map((m) => (
+                      <li key={m.user_id} className="flex justify-between">
+                        <span>{m.profile.full_name}</span>
+                        <span className="font-semibold">{m.net > 0 ? `gets back ₹${m.net}` : `owes ₹${Math.abs(m.net)}`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <span className="mt-2 block text-xs text-muted-foreground">
+                    This action cannot be undone. All history for this group will be wiped.
+                  </span>
+                </div>
+              ) : (
+                <p>
+                  Are you sure you want to delete <strong className="text-foreground">{groupName}</strong>? All group
+                  expenses, history, and member lists will be permanently deleted for all members. This action cannot be
+                  undone.
+                </p>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
             Cancel
           </Button>
-          {!hasUnsettled && (
-            <Button variant="destructive" loading={pending} onClick={handleDelete}>
-              Delete group
-            </Button>
-          )}
+          <Button variant="destructive" loading={pending} onClick={handleDelete}>
+            {hasUnsettled ? 'Delete group anyway' : 'Delete group'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

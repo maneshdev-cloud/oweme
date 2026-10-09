@@ -294,18 +294,6 @@ export function AddGroupExpenseDialog({
     }
   };
 
-  const handleSetFullPayerForPerson = (userId: string) => {
-    if (totalMinor <= 0) {
-      toast.error('Enter the total bill amount first.');
-      return;
-    }
-    const fullStr = (totalMinor / 100).toFixed(2);
-    const next: Record<string, string> = {};
-    for (const m of members) {
-      next[m.user_id] = m.user_id === userId ? fullStr : '';
-    }
-    setPayerAmounts(next);
-  };
 
   const handleFillRemainingShare = (userId: string) => {
     const currentShareSum = Object.entries(shareAmounts).reduce((sum, [id, val]) => {

@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PersonAvatar } from '@/components/person-avatar';
 import { searchPeople } from '@/lib/queries/social-actions';
 import { sendFriendRequest } from '@/lib/actions/friends';
+import { useRealtimeStatus } from '@/components/providers/realtime-provider';
 import type { Person, SearchResult } from '@/lib/types';
 
 /**
@@ -18,6 +19,7 @@ import type { Person, SearchResult } from '@/lib/types';
  */
 export function FriendSearch() {
   const router = useRouter();
+  const { lastEventAt } = useRealtimeStatus();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,12 +34,22 @@ export function FriendSearch() {
     }
     setLoading(true);
     const handle = setTimeout(async () => {
-      const found = await searchPeople(trimmed, 15);
-      setResults(found as unknown as SearchResult[]);
+      const found = (await searchPeople(trimmed, 15)) as unknown as SearchResult[];
+      setResults(found);
+      // Clean up local overrides for friends that have been accepted
+      setRequested((prev) => {
+        const next = { ...prev };
+        for (const p of found) {
+          if (p.friendship_status === 'accepted') {
+            delete next[p.id];
+          }
+        }
+        return next;
+      });
       setLoading(false);
     }, 250);
     return () => clearTimeout(handle);
-  }, [query]);
+  }, [query, lastEventAt]);
 
   function add(person: Person) {
     startTransition(async () => {

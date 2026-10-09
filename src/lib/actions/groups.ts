@@ -130,28 +130,26 @@ export async function deleteGroup(input: unknown): Promise<ActionResult> {
     return fail('Only a group owner or admin can delete this group.');
   }
 
-  // Check open balances
-  const { data: balances } = await supabase.rpc('group_balances_for', { p_group: parsed.data.groupId });
-  if (balances && Array.isArray(balances)) {
-    const hasUnsettled = balances.some((b: { net?: number }) => Math.abs(Number(b.net || 0)) > 0.001);
-    if (hasUnsettled) {
-      return fail('All group balances must be settled before deleting the group.');
-    }
-  }
-
-  // Attempt RPC first, fall back to cascading delete
+  // Attempt RPC first, or fall back to cascading delete
   const { error: rpcErr } = await supabase.rpc('delete_group', { p_group_id: parsed.data.groupId });
   if (rpcErr) {
-    await supabase.from('settlements').delete().eq('group_id', parsed.data.groupId);
-    await supabase.from('group_expenses').delete().eq('group_id', parsed.data.groupId);
-    // Delete group first while caller is still in group_members for RLS evaluation
-    const { error: directErr } = await supabase.from('groups').delete().eq('id', parsed.data.groupId);
+    const { createServiceClient } = await import('@/lib/supabase/server');
+    const serviceClient = createServiceClient() ?? supabase;
+
+    // 1. Soft-cancel any pending expenses so delete triggers don't block
+    await serviceClient
+      .from('group_expenses')
+      .update({ status: 'CANCELLED', cancelled_at: new Date().toISOString() })
+      .eq('group_id', parsed.data.groupId);
+
+    // 2. Cascade delete settlements and expenses
+    await serviceClient.from('settlements').delete().eq('group_id', parsed.data.groupId);
+    await serviceClient.from('group_expenses').delete().eq('group_id', parsed.data.groupId);
+    await serviceClient.from('group_members').delete().eq('group_id', parsed.data.groupId);
+
+    const { error: directErr } = await serviceClient.from('groups').delete().eq('id', parsed.data.groupId);
     if (directErr) {
-      await supabase.from('group_members').delete().eq('group_id', parsed.data.groupId);
-      const { error: retryErr } = await supabase.from('groups').delete().eq('id', parsed.data.groupId);
-      if (retryErr) return fail(retryErr.message);
-    } else {
-      await supabase.from('group_members').delete().eq('group_id', parsed.data.groupId);
+      return fail(directErr.message);
     }
   }
 

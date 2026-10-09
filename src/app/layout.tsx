@@ -57,7 +57,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-IN" suppressHydrationWarning className={inter.variable}>
-      <body className="min-h-svh font-sans">
+      <body className="min-h-svh font-sans" suppressHydrationWarning>
         <ThemeProvider>
           {children}
           <Toaster />

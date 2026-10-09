@@ -1,24 +1,25 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Calculator, ReceiptText, UsersRound } from 'lucide-react';
+import { ArrowLeft, Calculator, UsersRound } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Amount } from '@/components/money';
 import { PersonAvatar } from '@/components/person-avatar';
-import { CategoryChip } from '@/components/category-chip';
 import { StatusBadge } from '@/components/status-badge';
-import { AddGroupExpenseDialog, EditGroupExpenseDialog } from '@/components/groups/add-group-expense-dialog';
+import { AddGroupExpenseDialog } from '@/components/groups/add-group-expense-dialog';
 import { GroupMemberActions } from '@/components/groups/group-member-actions';
 import { DeleteGroupDialog } from '@/components/groups/delete-group-dialog';
 import { SettleUpButton } from '@/components/settle-up-dialog';
 import { TripSettledSummary } from '@/components/groups/trip-settled-summary';
+import { GroupBalanceLedger } from '@/components/groups/group-balance-ledger';
+import { GroupExpensesSection } from '@/components/groups/group-expenses-section';
 import { requireUser } from '@/lib/supabase/server';
 import { getGroupDetail } from '@/lib/queries/social';
 import { getAppSettings } from '@/lib/queries/core';
 import { formatINR, toMinor } from '@/lib/money';
 import { minimizeTransfers } from '@/lib/settlement';
-import { formatDateTime, isEdited, timeAgo } from '@/lib/utils';
+import { timeAgo } from '@/lib/utils';
 
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -151,6 +152,11 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
         </CardContent>
       </Card>
 
+      <GroupBalanceLedger
+        currentUserId={user.id}
+        members={members}
+      />
+
       {myPayments.length > 0 && (
         <Card className="border-primary/40">
           <CardHeader className="pb-2">
@@ -200,81 +206,14 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
         </Card>
       )}
 
-      <section aria-labelledby="group-expenses" className="space-y-3">
-        <h2 id="group-expenses" className="flex items-center gap-2 text-base font-semibold">
-          <ReceiptText className="h-4 w-4" aria-hidden /> Group expenses
-        </h2>
-
-        {expenses.length === 0 ? (
-          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No expenses yet. Add the first one and everybody sees their share straight away.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {expenses.map((expense) => (
-              <li key={expense.id}>
-                <Card className={expense.status === 'CANCELLED' ? 'opacity-70' : undefined}>
-                  <CardContent className="space-y-2 p-3.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-medium">
-                            {expense.description}
-                          </p>
-                          <CategoryChip category={expense.category} className="align-middle" />
-                          {isEdited(expense.created_at, expense.updated_at) && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] px-1.5 py-0 font-normal border-muted-foreground/30 text-muted-foreground"
-                              title={`Edited on ${expense.updated_at ? formatDateTime(expense.updated_at) : ''}`}
-                            >
-                              Edited
-                            </Badge>
-                          )}
-                        </div>
-                        {expense.payers && expense.payers.length > 1 ? (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {expense.payers.length} people paid {formatINR(toMinor(expense.amount))} (
-                            {expense.payers
-                              .map((p) => `${nameOf(p.user_id)} ${formatINR(toMinor(p.paid_amount))}`)
-                              .join(', ')}
-                            ) · <span title={formatDateTime(expense.created_at)}>{timeAgo(expense.created_at)}</span>
-                          </p>
-                        ) : (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {nameOf(expense.paid_by)} paid {formatINR(toMinor(expense.amount))} ·{' '}
-                            <span title={formatDateTime(expense.created_at)}>{timeAgo(expense.created_at)}</span>
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isOwner && expense.status !== 'CANCELLED' && (
-                          <EditGroupExpenseDialog
-                            groupId={group.id}
-                            members={members}
-                            currentUserId={user.id}
-                            expense={expense}
-                            disabled={disabled}
-                          />
-                        )}
-                        <StatusBadge status={expense.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING'} />
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground/70">Shares:</span>
-                      {expense.shares.map((share) => (
-                        <span key={share.user_id}>
-                          {nameOf(share.user_id)}: {formatINR(toMinor(share.share_amount))}
-                        </span>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <GroupExpensesSection
+        groupId={group.id}
+        members={members}
+        currentUserId={user.id}
+        expenses={expenses}
+        isAdminOrOwner={isAdminOrOwner}
+        disabled={disabled}
+      />
 
       {settlements.length > 0 && (
         <section aria-labelledby="group-settlements" className="space-y-3">

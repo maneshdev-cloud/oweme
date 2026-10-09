@@ -32,7 +32,6 @@ const REALTIME_TABLES = [
   'group_members',
   'group_expenses',
   'group_expense_shares',
-  'group_expense_payers',
   'settlements',
   'app_settings',
 ] as const;
@@ -56,6 +55,8 @@ export function RealtimeProvider({ userId, children }: { userId: string; childre
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     const refreshSoon = (payload?: { table?: string; eventType?: string; old?: Record<string, unknown> }) => {
       setLastEventAt(Date.now());
       if (timer.current) clearTimeout(timer.current);
@@ -120,14 +121,39 @@ export function RealtimeProvider({ userId, children }: { userId: string; childre
       });
     }
 
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') setState('live');
-      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setState('reconnecting');
-      else setState('connecting');
+    // Authenticate Realtime WebSocket with caller's JWT so Postgres evaluates RLS with auth.uid()
+    async function startSubscription() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await supabase.realtime.setAuth(session.access_token);
+        }
+      } catch (err) {
+        console.warn('Realtime setAuth error:', err);
+      }
+
+      if (!active) return;
+
+      channel.subscribe((status) => {
+        if (!active) return;
+        if (status === 'SUBSCRIBED') setState('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setState('reconnecting');
+        else setState('connecting');
+      });
+    }
+
+    void startSubscription();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) {
+        void supabase.realtime.setAuth(session.access_token);
+      }
     });
 
     return () => {
+      active = false;
       if (timer.current) clearTimeout(timer.current);
+      authListener.subscription.unsubscribe();
       void supabase.removeChannel(channel);
     };
   }, [supabase, userId, router]);

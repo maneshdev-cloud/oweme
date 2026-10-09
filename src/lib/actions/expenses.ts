@@ -551,7 +551,7 @@ export async function createGroupExpense(
 }
 
 export async function updateGroupExpense(input: unknown): Promise<ActionResult> {
-  const user = await requireUser();
+  await requireUser();
   const maintenanceBlock = await assertMaintenanceAllowsWrites();
   if (maintenanceBlock) return maintenanceBlock;
 
@@ -609,7 +609,7 @@ export async function cancelGroupExpense(input: unknown): Promise<ActionResult> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('group_expenses')
-    .update({ status: 'CANCELLED' })
+    .update({ status: 'CANCELLED', cancelled_at: new Date().toISOString() })
     .eq('id', shape.data.expenseId)
     .select('group_id')
     .single();
@@ -619,6 +619,60 @@ export async function cancelGroupExpense(input: unknown): Promise<ActionResult> 
     revalidatePath(`/groups/${data.group_id}`);
     revalidatePath('/groups');
   }
+  return okVoid();
+}
+
+/**
+ * Delete a mistaken group expense entirely.
+ * Allowed for the person who added it, who paid, or the group owner/admin.
+ */
+export async function deleteGroupExpense(input: unknown): Promise<ActionResult> {
+  const user = await requireUser();
+  const shape = expenseTransitionSchema.safeParse(input);
+  if (!shape.success) return fail('Invalid expense.');
+
+  const supabase = await createClient();
+  const { data: exp, error: fetchErr } = await supabase
+    .from('group_expenses')
+    .select('id, group_id, created_by, paid_by')
+    .eq('id', shape.data.expenseId)
+    .single();
+
+  if (fetchErr || !exp) return fail('Expense not found.');
+
+  // Check if caller has permission
+  const { data: member } = await supabase
+    .from('group_members')
+    .select('role')
+    .eq('group_id', exp.group_id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const isOwnerOrAdmin = member?.role === 'owner' || member?.role === 'admin';
+  const isCreatorOrPayer = exp.created_by === user.id || exp.paid_by === user.id;
+
+  if (!isOwnerOrAdmin && !isCreatorOrPayer) {
+    return fail('Only the person who entered the expense, who paid, or a group admin can delete it.');
+  }
+
+  const { createServiceClient } = await import('@/lib/supabase/server');
+  const service = createServiceClient() ?? supabase;
+
+  // Soft-cancel first to satisfy DB financial delete triggers, then delete
+  await service
+    .from('group_expenses')
+    .update({ status: 'CANCELLED', cancelled_at: new Date().toISOString() })
+    .eq('id', exp.id);
+
+  await service.from('group_expense_shares').delete().eq('group_expense_id', exp.id);
+  const { error: delErr } = await service.from('group_expenses').delete().eq('id', exp.id);
+
+  if (delErr) {
+    return fail(friendly(delErr));
+  }
+
+  revalidatePath(`/groups/${exp.group_id}`);
+  revalidatePath('/groups');
   return okVoid();
 }
 
